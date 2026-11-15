@@ -12,7 +12,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
 )
 
 const (

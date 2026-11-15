@@ -3,8 +3,8 @@ package cmd
 import (
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
-	"github.com/GardenVilla/alicerealm/cli/internal/profilestate"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/profilestate"
 )
 
 // Refresh trigger attribution. The CLI is the only component that knows

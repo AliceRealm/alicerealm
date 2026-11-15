@@ -27,7 +27,7 @@ class WorkflowGateTest(unittest.TestCase):
             output = directory / "output"
             output.touch()
             env = dict(os.environ, PATH=f"{temp}:/usr/bin:/bin", RUNNER_TEMP=temp,
-                       GITHUB_OUTPUT=str(output), GH_REPO="GardenVilla/alicerealm",
+                       GITHUB_OUTPUT=str(output), GH_REPO="AliceRealm/alicerealm",
                        PR_NUMBER="123", TEST_FILES=filenames, TEST_STATUS=str(status))
             result = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", script],
                                     env=env, capture_output=True, text=True)

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
-	watchstate "github.com/GardenVilla/alicerealm/cli/internal/watch"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
+	watchstate "github.com/AliceRealm/alicerealm/cli/internal/watch"
 )
 
 func repairContinuationFixture(t *testing.T) (maintenance.Scope, maintenance.Cycle, heartbeatHostInput, string) {

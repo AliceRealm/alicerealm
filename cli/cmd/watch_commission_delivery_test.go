@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
 )
 
 func TestCommissionDeliveryTemporaryUploadRetainsEvidence(t *testing.T) {

@@ -14,7 +14,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/client"
+	"github.com/AliceRealm/alicerealm/cli/internal/client"
 	"github.com/spf13/cobra"
 )
 

@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/commissionapi"
+	"github.com/AliceRealm/alicerealm/cli/internal/commissionapi"
 )
 
 // Only immutable inputs already uploaded by this order's bound buyer are made

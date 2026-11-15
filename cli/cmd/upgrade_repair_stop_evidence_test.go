@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
 )
 
 func finishRepairEvidenceCycle(t *testing.T, scope maintenance.Scope) maintenance.Cycle {

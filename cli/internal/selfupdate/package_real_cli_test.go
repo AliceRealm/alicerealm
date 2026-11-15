@@ -52,7 +52,7 @@ func TestRealCLIConsecutiveCompleteUpdates(t *testing.T) {
 	payloads := map[string][]byte{}
 	for _, version := range []string{"9.8.7", "9.8.8"} {
 		fixture := filepath.Join(directory, "cli-"+version+filepath.Ext(versionExecutableName()))
-		flags := "-X main.Version=" + version + " -X github.com/GardenVilla/alicerealm/cli/internal/skills.VerifyPublicKeyBase64=" + base64.StdEncoding.EncodeToString(public)
+		flags := "-X main.Version=" + version + " -X github.com/AliceRealm/alicerealm/cli/internal/skills.VerifyPublicKeyBase64=" + base64.StdEncoding.EncodeToString(public)
 		build := exec.Command("go", "build", "-ldflags", flags, "-o", fixture, ".")
 		build.Dir = cliDirectory
 		if output, err := build.CombinedOutput(); err != nil {

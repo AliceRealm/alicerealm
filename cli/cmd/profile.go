@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
-	"github.com/GardenVilla/alicerealm/cli/internal/cache"
-	"github.com/GardenVilla/alicerealm/cli/internal/client"
-	"github.com/GardenVilla/alicerealm/cli/internal/output"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/cache"
+	"github.com/AliceRealm/alicerealm/cli/internal/client"
+	"github.com/AliceRealm/alicerealm/cli/internal/output"
 	"github.com/spf13/cobra"
 )
 

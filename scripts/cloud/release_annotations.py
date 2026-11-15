@@ -44,7 +44,7 @@ def load_manifest(path):
         for key, limit in [('title', 160), ('description', 2000)]:
             if not isinstance(e[key], str) or not e[key].strip() or len(e[key]) > limit:
                 raise ValueError('invalid release title or description')
-        if not isinstance(e['pr'], str) or not re.fullmatch(r'https://github.com/GardenVilla/alicerealm/pull/[1-9][0-9]*', e['pr']):
+        if not isinstance(e['pr'], str) or not re.fullmatch(r'https://github.com/AliceRealm/alicerealm/pull/[1-9][0-9]*', e['pr']):
             raise ValueError('release declaration requires its PR URL')
     return events
 

@@ -47,7 +47,7 @@ class CodexMarketplaceCleanup(unittest.TestCase):
         self.env.update({
             "GIT_CONFIG_COUNT": "1",
             "GIT_CONFIG_KEY_0": "url." + self.source.as_uri() + ".insteadOf",
-            "GIT_CONFIG_VALUE_0": "https://github.com/GardenVilla/codex-alicerealm.git",
+            "GIT_CONFIG_VALUE_0": "https://github.com/AliceRealm/codex-alicerealm.git",
             "GIT_ALLOW_PROTOCOL": "file",
         })
         self.config = self.home / ".codex/config.toml"
@@ -78,20 +78,20 @@ class CodexMarketplaceCleanup(unittest.TestCase):
         self.assertIn('model = "unchanged-model"', self.config.read_text())
         self.assertIn('[plugins."other@other"]', self.config.read_text())
         self.assertEqual(self.other.read_text(), "unrelated marketplace")
-        self.call("add", "GardenVilla/codex-alicerealm")
+        self.call("add", "AliceRealm/codex-alicerealm")
         self.assertIn("alicerealm", self.call("list").stdout)
         self.assertTrue((self.market / ".agents/plugins/marketplace.json").is_file())
 
     def test_registered_marketplace_removal_clears_installed_root(self):
-        self.call("add", "GardenVilla/codex-alicerealm")
+        self.call("add", "AliceRealm/codex-alicerealm")
         self.verify_remove_and_readd()
 
     def test_orphan_hidden_from_list_still_needs_native_marketplace_removal(self):
-        self.call("add", "GardenVilla/codex-alicerealm")
+        self.call("add", "AliceRealm/codex-alicerealm")
         # Reproduce removal of configuration without its installed checkout.
         self.config.write_text(self.unrelated)
         self.assertNotIn("alicerealm", self.call("list").stdout)
-        rejected = self.call("add", "GardenVilla/codex-alicerealm", success=False)
+        rejected = self.call("add", "AliceRealm/codex-alicerealm", success=False)
         self.assertNotEqual(rejected.returncode, 0)
         self.assertIn("different source", rejected.stderr)
         self.verify_remove_and_readd()
@@ -163,10 +163,10 @@ class CodexMarketplaceCleanup(unittest.TestCase):
 
         # Apply the Skill's ownership checks before the native removal commands.
         origin = self.run_command(["git", "-C", str(self.market), "config", "--get", "remote.origin.url"]).stdout.strip()
-        self.assertEqual(origin, "https://github.com/GardenVilla/codex-alicerealm.git")
+        self.assertEqual(origin, "https://github.com/AliceRealm/codex-alicerealm.git")
         catalog = json.loads((self.market / ".agents/plugins/marketplace.json").read_text())
         self.assertEqual([entry["name"] for entry in catalog["plugins"]], ["codex-alicerealm"])
-        self.assertIn("GardenVilla/codex-alicerealm", self.config.read_text())
+        self.assertIn("AliceRealm/codex-alicerealm", self.config.read_text())
         self.run_command([self.codex, "plugin", "remove", "codex-alicerealm@alicerealm"])
         self.call("remove", "alicerealm")
         self.assertFalse(self.market.exists())

@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
 )
 
 func TestUpdateObservationOfflineReplay(t *testing.T) {

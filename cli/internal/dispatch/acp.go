@@ -11,7 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/mainbridge"
+	"github.com/AliceRealm/alicerealm/cli/internal/mainbridge"
 )
 
 type acpMessage struct {

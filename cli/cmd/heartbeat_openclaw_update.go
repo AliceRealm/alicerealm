@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
-	"github.com/GardenVilla/alicerealm/cli/internal/pluginupdate"
-	watchstate "github.com/GardenVilla/alicerealm/cli/internal/watch"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/pluginupdate"
+	watchstate "github.com/AliceRealm/alicerealm/cli/internal/watch"
 	"github.com/spf13/cobra"
 )
 

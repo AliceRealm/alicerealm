@@ -7,8 +7,8 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
-	"github.com/GardenVilla/alicerealm/cli/internal/skills"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
+	"github.com/AliceRealm/alicerealm/cli/internal/skills"
 )
 
 func reexecWatch(path string, args, env []string) error {

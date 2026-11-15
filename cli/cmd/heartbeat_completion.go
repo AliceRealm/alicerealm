@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
 	"github.com/spf13/cobra"
 )
 

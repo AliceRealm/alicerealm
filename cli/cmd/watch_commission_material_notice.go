@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/desktopnotify"
-	"github.com/GardenVilla/alicerealm/cli/internal/desktopqueue"
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/desktopnotify"
+	"github.com/AliceRealm/alicerealm/cli/internal/desktopqueue"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
 )
 
 // Persist both reminders before completing the single automatic answer attempt.

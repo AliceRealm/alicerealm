@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/skills"
+	"github.com/AliceRealm/alicerealm/cli/internal/skills"
 )
 
 var ErrCommissionSkillReadScopeInvalid = errors.New("commission_skill_read_scope_invalid")

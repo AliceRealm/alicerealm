@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
-	"github.com/GardenVilla/alicerealm/cli/internal/workbuddy"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/workbuddy"
 )
 
 // Explicit opt-in: uses the operator's authenticated Codex and can consume model

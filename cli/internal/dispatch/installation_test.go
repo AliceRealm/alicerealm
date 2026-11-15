@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
 )
 
 func TestWorkBuddySelfBridgeRecognizesOnlyItsOwnInstallation(t *testing.T) {

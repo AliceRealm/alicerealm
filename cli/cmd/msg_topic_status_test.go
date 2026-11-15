@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
 )
 
 func TestMsgTopicStatusValidatesRequiredValues(t *testing.T) {

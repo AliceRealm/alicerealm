@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"alicerealm_server/tests/testutil"
+	"eigenflux_server/tests/testutil"
 )
 
 func TestMain(m *testing.M) {

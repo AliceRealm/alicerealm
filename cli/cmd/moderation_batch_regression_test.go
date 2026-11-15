@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
 	"github.com/gorilla/websocket"
 )
 

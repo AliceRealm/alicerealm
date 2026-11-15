@@ -16,9 +16,9 @@ import (
 	"github.com/cloudwego/hertz/pkg/common/ut"
 	"github.com/cloudwego/hertz/pkg/network/standard"
 
-	"alicerealm_server/api/consolev2"
-	"alicerealm_server/api/install"
-	"alicerealm_server/pkg/config"
+	"eigenflux_server/api/consolev2"
+	"eigenflux_server/api/install"
+	"eigenflux_server/pkg/config"
 )
 
 // This test uses the built CLI in separate processes, a real HTTP listener,

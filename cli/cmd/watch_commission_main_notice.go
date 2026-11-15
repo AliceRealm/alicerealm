@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
-	"github.com/GardenVilla/alicerealm/cli/internal/skills"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/skills"
 )
 
 func (w *accountWatch) mainNoticeQueue() (*dispatch.MainNoticeQueue, error) {

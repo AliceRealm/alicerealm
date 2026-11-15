@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
 )
 
 func heartbeatTestPromptHash(prompt string) string {

@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
-	"github.com/GardenVilla/alicerealm/cli/internal/desktopnotify"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/desktopnotify"
 	"context"
 	"encoding/json"
 	"errors"
@@ -19,8 +19,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/desktopqueue"
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/desktopqueue"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
 )
 
 func TestDesktopOrderLinkKeepsExactIdentityAndRejectsUnsafeOrigins(t *testing.T) {

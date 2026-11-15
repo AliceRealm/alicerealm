@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
-	"github.com/GardenVilla/alicerealm/cli/internal/heartbeatmigration"
-	watchstate "github.com/GardenVilla/alicerealm/cli/internal/watch"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/heartbeatmigration"
+	watchstate "github.com/AliceRealm/alicerealm/cli/internal/watch"
 )
 
 const lifecycleThread = "01a0d200-9d41-7cd2-9214-3f04761910c4"

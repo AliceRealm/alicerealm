@@ -3,8 +3,8 @@ package cmd
 import (
 	"io"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
 )
 
 // Record process execution before watch readiness: notification-only watches and

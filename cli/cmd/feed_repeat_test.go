@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/GardenVilla/alicerealm/cli/internal/feedevent"
+	"github.com/AliceRealm/alicerealm/cli/internal/feedevent"
 	"fmt"
 	"github.com/spf13/cobra"
 	"net/http"

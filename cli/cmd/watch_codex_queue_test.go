@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
 )
 
 func TestWatchCodexQueueHost(t *testing.T) {

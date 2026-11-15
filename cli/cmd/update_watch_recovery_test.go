@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
-	"github.com/GardenVilla/alicerealm/cli/internal/watchservice"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/watchservice"
 	"context"
 	"errors"
 	"testing"

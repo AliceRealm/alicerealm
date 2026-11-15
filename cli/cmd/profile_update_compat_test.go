@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/client"
+	"github.com/AliceRealm/alicerealm/cli/internal/client"
 )
 
 type profileFieldsClientStub struct {

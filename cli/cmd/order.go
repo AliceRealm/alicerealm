@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/client"
-	"github.com/GardenVilla/alicerealm/cli/internal/commissionapi"
-	"github.com/GardenVilla/alicerealm/cli/internal/output"
+	"github.com/AliceRealm/alicerealm/cli/internal/client"
+	"github.com/AliceRealm/alicerealm/cli/internal/commissionapi"
+	"github.com/AliceRealm/alicerealm/cli/internal/output"
 	"github.com/spf13/cobra"
 )
 

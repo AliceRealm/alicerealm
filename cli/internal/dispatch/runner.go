@@ -18,7 +18,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
 )
 
 const maxRunnerOutput = 1 << 20

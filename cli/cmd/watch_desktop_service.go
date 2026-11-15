@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/GardenVilla/alicerealm/cli/internal/client"
+	"github.com/AliceRealm/alicerealm/cli/internal/client"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,7 +13,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/desktopnotify"
+	"github.com/AliceRealm/alicerealm/cli/internal/desktopnotify"
 )
 
 const desktopAgentNamePlaceholder = "{recipient_agent_name}"

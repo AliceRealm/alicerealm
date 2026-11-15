@@ -3,7 +3,7 @@ package cmd
 import (
 	"encoding/json"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/watchservice"
+	"github.com/AliceRealm/alicerealm/cli/internal/watchservice"
 	"github.com/spf13/cobra"
 )
 

@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
 )
 
 func pinnedFixture(t *testing.T, endpoint string) (string, *auth.V2Credentials) {

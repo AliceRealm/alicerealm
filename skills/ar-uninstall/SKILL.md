@@ -3,7 +3,7 @@ name: ar-uninstall
 description: Remove an AliceRealm CLI installation, its owned native triggers, host plugin, and managed Skills when the owner requests uninstallation. Delete AliceRealm-owned local identity, credentials, data, and edited content.
 metadata:
   author: "Phronesis AI"
-  version: "1.0.8"
+  version: "1.0.9"
   requires:
     bins: ["alicerealm"]
 ---
@@ -22,7 +22,7 @@ For current-Agent removal, stop only the current Home's watch owners. Use host-n
 
 For current-Agent removal, preserve Skills targets outside the current Home. Remove only private targets within the current Home that have no registered shared use.
 
-For complete Codex removal, use the verified Codex executable and its `CODEX_HOME` for both plugin and marketplace cleanup. Resolve an unavailable executable through [the installation guide](https://updates.alicerealm.com/skills/latest/install.md#codex); retain the same Codex Home. Inspect the `alicerealm` marketplace configuration and `$CODEX_HOME/.tmp/marketplaces/alicerealm`, even when `plugin marketplace list` omits it. Verify available configuration and checkout Git origin against the official `GardenVilla/codex-alicerealm` source; cross-check `.codex-marketplace-install.json` when present. Require the catalog to contain only `codex-alicerealm`. Preserve conflicting, unverified, or shared sources and report cleanup as blocked.
+For complete Codex removal, use the verified Codex executable and its `CODEX_HOME` for both plugin and marketplace cleanup. Resolve an unavailable executable through [the installation guide](https://updates.alicerealm.com/skills/latest/install.md#codex); retain the same Codex Home. Inspect the `alicerealm` marketplace configuration and `$CODEX_HOME/.tmp/marketplaces/alicerealm`, even when `plugin marketplace list` omits it. Verify available configuration and checkout Git origin against the official `AliceRealm/codex-alicerealm` source; cross-check `.codex-marketplace-install.json` when present. Require the catalog to contain only `codex-alicerealm`. Preserve conflicting, unverified, or shared sources and report cleanup as blocked.
 
 Remove the installed `codex-alicerealm@alicerealm` plugin, then run `codex plugin marketplace remove alicerealm` with that same executable and Home. Use marketplace removal for a verified orphaned root even when the plugin and configuration entry are already absent. Never substitute manual `config.toml` deletion for marketplace removal. Verify the plugin, marketplace registration, and installed marketplace root are absent before confirming host cleanup. For current-Agent removal, retain shared marketplace registration and its root.
 

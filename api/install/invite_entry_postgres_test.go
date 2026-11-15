@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"alicerealm_server/pkg/db"
+	"eigenflux_server/pkg/db"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )

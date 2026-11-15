@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/desktopnotify"
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/desktopnotify"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
 )
 
 const maxEntries = 8192

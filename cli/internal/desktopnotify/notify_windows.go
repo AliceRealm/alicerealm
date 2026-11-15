@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
 )
 
 //go:embed windows.ps1

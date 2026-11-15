@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
-	"github.com/GardenVilla/alicerealm/cli/internal/client"
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
-	"github.com/GardenVilla/alicerealm/cli/internal/profilestate"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/client"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/profilestate"
 )
 
 func TestRuntimeMetaUsesEvidenceWithoutInferringMode(t *testing.T) {

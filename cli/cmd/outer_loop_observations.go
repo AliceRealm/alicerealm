@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
-	"github.com/GardenVilla/alicerealm/cli/internal/watchservice"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/watchservice"
 	"github.com/spf13/cobra"
 )
 

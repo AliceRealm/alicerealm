@@ -77,7 +77,7 @@ binary installation path. Identity-directory selection remains host-scoped.
 
 ## Release ownership and credentials
 
-Use the existing `Release CLI` workflow in `GardenVilla/alicerealm`, dispatched
+Use the existing `Release CLI` workflow in `AliceRealm/alicerealm`, dispatched
 from `main` after the release PR is merged. Repository Actions Secrets hold the
 existing Skills signing key and R2 credentials plus `MACOS_CERTIFICATE_P12_BASE64`,
 `MACOS_CERTIFICATE_PASSWORD`, `MACOS_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID`,

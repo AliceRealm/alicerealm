@@ -18,9 +18,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/commissionapi"
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/commissionapi"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
 )
 
 func materialTestOrder() commissionIntakeOrder {

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
-	"github.com/GardenVilla/alicerealm/cli/internal/skills"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/skills"
 )
 
 // Recovery receipts carry bounded reasons, never network errors or local paths.

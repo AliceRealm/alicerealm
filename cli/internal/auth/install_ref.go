@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
 )
 
 var installRefPattern = regexp.MustCompile(`^EF-[0-9A-Za-z]{8}$`)

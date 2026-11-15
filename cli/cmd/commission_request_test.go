@@ -13,9 +13,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/commissionapi"
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
-	"github.com/GardenVilla/alicerealm/cli/internal/requestcontract"
+	"github.com/AliceRealm/alicerealm/cli/internal/commissionapi"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/requestcontract"
 )
 
 const scenarioSchema = `{"type":"object","required":["scenario"],"properties":{"scenario":{"type":"string"}}}`

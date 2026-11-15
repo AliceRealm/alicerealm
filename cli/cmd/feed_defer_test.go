@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/feedevent"
+	"github.com/AliceRealm/alicerealm/cli/internal/feedevent"
 )
 
 func TestFeedDeferredItemSurvivesCycleCloseAndEmptyRefresh(t *testing.T) {

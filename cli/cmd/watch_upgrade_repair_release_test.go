@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/skills"
+	"github.com/AliceRealm/alicerealm/cli/internal/skills"
 )
 
 func upgradeRepairReleaseFixture(t *testing.T) (string, func(string, bool)) {

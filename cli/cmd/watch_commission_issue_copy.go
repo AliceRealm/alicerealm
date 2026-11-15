@@ -1,6 +1,6 @@
 package cmd
 
-import "github.com/GardenVilla/alicerealm/cli/internal/dispatch"
+import "github.com/AliceRealm/alicerealm/cli/internal/dispatch"
 
 func desktopCommissionBlockerText(language, status, code string) (string, string) {
 	uncertain := map[string]struct{ zhTitle, zhBody, enTitle, enBody string }{

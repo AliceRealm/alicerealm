@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"alicerealm_server/pkg/db"
+	"eigenflux_server/pkg/db"
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/ut"
 	"gorm.io/driver/sqlite"

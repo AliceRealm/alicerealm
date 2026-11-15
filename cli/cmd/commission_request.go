@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"unicode/utf8"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/commissionapi"
-	"github.com/GardenVilla/alicerealm/cli/internal/requestcontract"
+	"github.com/AliceRealm/alicerealm/cli/internal/commissionapi"
+	"github.com/AliceRealm/alicerealm/cli/internal/requestcontract"
 )
 
 const maxRequestDocumentBytes = 1 << 20

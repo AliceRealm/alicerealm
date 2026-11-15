@@ -534,7 +534,7 @@ flow reports the published version and compare downloaded bytes with the stamped
 artifact checksum. Subsequent installer releases require no API deployment.
 
 Agent-facing installation instructions are maintained in
-`https://github.com/GardenVilla/alicerealm/blob/main/skills/install.md`.
+`https://github.com/AliceRealm/alicerealm/blob/main/skills/install.md`.
 The gateway serves one public entry that hands off to that document:
 
 - `GET /bootstrap.md` — Static compatibility entry (`static/BOOTSTRAP.md`) to the GitHub installation guide

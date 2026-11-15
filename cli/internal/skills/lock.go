@@ -3,7 +3,7 @@ package skills
 import (
 	"path/filepath"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/filelock"
+	"github.com/AliceRealm/alicerealm/cli/internal/filelock"
 )
 
 // Lock is retained on disk; only the OS lock, not file presence or age, denotes

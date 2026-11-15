@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
 )
 
 // withControlContext augments one CLI result without changing any V1 server

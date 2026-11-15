@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"bytes"
-	"github.com/GardenVilla/alicerealm/cli/internal/cache"
-	"github.com/GardenVilla/alicerealm/cli/internal/output"
+	"github.com/AliceRealm/alicerealm/cli/internal/cache"
+	"github.com/AliceRealm/alicerealm/cli/internal/output"
 	"encoding/json"
 	"fmt"
 	"github.com/spf13/cobra"

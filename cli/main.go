@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/GardenVilla/alicerealm/cli/cmd"
+	"github.com/AliceRealm/alicerealm/cli/cmd"
 )
 
 var (

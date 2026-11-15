@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/desktopnotify"
-	"github.com/GardenVilla/alicerealm/cli/internal/desktopqueue"
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/desktopnotify"
+	"github.com/AliceRealm/alicerealm/cli/internal/desktopqueue"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
 )
 
 // Telemetry has its own durable bounded observation queue. Failure never retries

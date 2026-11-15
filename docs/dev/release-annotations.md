@@ -13,7 +13,7 @@ need no entry. PR merge time is never an activation time.
   "dashboards": ["card-refresh"],
   "title": "Automatic check completion recording starts",
   "description": "Changed and unchanged scheduled checks are recorded. Older clients can under-report; manual checks do not count.",
-  "pr": "https://github.com/GardenVilla/alicerealm/pull/123"
+  "pr": "https://github.com/AliceRealm/alicerealm/pull/123"
 }
 ```
 

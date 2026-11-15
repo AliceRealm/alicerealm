@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
-	"github.com/GardenVilla/alicerealm/cli/internal/feedevent"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/feedevent"
 	"github.com/spf13/cobra"
 )
 

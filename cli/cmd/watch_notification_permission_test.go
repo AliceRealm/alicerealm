@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/desktopnotify"
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/desktopnotify"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
 )
 
 func TestNotificationDeviceIdentityPersistsAndRejectsCorruption(t *testing.T) {

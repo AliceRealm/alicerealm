@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
 )
 
 // Successful plan delivery is separate from the first executed stage. A failed

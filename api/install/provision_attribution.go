@@ -3,8 +3,8 @@ package install
 import (
 	"errors"
 
-	"alicerealm_server/pkg/agentidentity"
-	"alicerealm_server/pkg/invite"
+	"eigenflux_server/pkg/agentidentity"
+	"eigenflux_server/pkg/invite"
 	"gorm.io/gorm"
 )
 

@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	watchstate "github.com/GardenVilla/alicerealm/cli/internal/watch"
+	watchstate "github.com/AliceRealm/alicerealm/cli/internal/watch"
 )
 
 func BindingPath(home, server string) string {

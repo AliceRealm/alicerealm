@@ -1,4 +1,4 @@
-module github.com/GardenVilla/alicerealm/cli
+module github.com/AliceRealm/alicerealm/cli
 
 go 1.25.0
 

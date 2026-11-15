@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
 )
 
 func TestDiscoverProductionSkillsIsExtensible(t *testing.T) {

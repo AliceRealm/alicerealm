@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
-	"github.com/GardenVilla/alicerealm/cli/internal/filelock"
-	"github.com/GardenVilla/alicerealm/cli/internal/skills"
-	watchstate "github.com/GardenVilla/alicerealm/cli/internal/watch"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/filelock"
+	"github.com/AliceRealm/alicerealm/cli/internal/skills"
+	watchstate "github.com/AliceRealm/alicerealm/cli/internal/watch"
 )
 
 func TestUninstallInstallationRegistry(t *testing.T) {

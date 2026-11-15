@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	watchstate "github.com/GardenVilla/alicerealm/cli/internal/watch"
+	watchstate "github.com/AliceRealm/alicerealm/cli/internal/watch"
 )
 
 func TestReplaceInstallationHonorsUninstallLocks(t *testing.T) {

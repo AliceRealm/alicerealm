@@ -25,9 +25,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	redis "github.com/redis/go-redis/v9"
 
-	"alicerealm_server/api/consolev2"
-	"alicerealm_server/api/install"
-	"alicerealm_server/pkg/config"
+	"eigenflux_server/api/consolev2"
+	"eigenflux_server/api/install"
+	"eigenflux_server/pkg/config"
 )
 
 // Exercise automatic and explicit CLI recovery with public registration on and

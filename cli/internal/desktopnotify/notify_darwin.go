@@ -16,7 +16,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
 	"golang.org/x/sys/unix"
 )
 

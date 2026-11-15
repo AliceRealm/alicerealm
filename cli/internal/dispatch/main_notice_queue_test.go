@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	watchstate "github.com/GardenVilla/alicerealm/cli/internal/watch"
+	watchstate "github.com/AliceRealm/alicerealm/cli/internal/watch"
 )
 
 func TestMainNoticeQueuePreservesSameVersionEventsAndNoReplay(t *testing.T) {

@@ -51,7 +51,7 @@ esac''')
 case "$*" in
   --version) echo 'codex-cli 0.142.0' ;;
   'plugin list --json') if [ -f "$HOME/codex-present" ]; then echo '[{"id":"codex-alicerealm@alicerealm"}]'; else echo '[]'; fi ;;
-  'plugin marketplace add GardenVilla/codex-alicerealm') : ;;
+  'plugin marketplace add AliceRealm/codex-alicerealm') : ;;
   'plugin add codex-alicerealm@alicerealm') touch "$HOME/codex-present" ;;
   *) echo 'Unexpected Codex operation' >&2; exit 1 ;;
 esac''')

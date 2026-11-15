@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/cache"
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/cache"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
 	"github.com/gorilla/websocket"
 	"github.com/spf13/cobra"
 )

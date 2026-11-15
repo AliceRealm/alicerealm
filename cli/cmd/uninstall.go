@@ -12,14 +12,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
-	"github.com/GardenVilla/alicerealm/cli/internal/desktopnotify"
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
-	"github.com/GardenVilla/alicerealm/cli/internal/output"
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
-	"github.com/GardenVilla/alicerealm/cli/internal/skills"
-	"github.com/GardenVilla/alicerealm/cli/internal/uninstallscript"
-	watchstate "github.com/GardenVilla/alicerealm/cli/internal/watch"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/desktopnotify"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/output"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
+	"github.com/AliceRealm/alicerealm/cli/internal/skills"
+	"github.com/AliceRealm/alicerealm/cli/internal/uninstallscript"
+	watchstate "github.com/AliceRealm/alicerealm/cli/internal/watch"
 	"github.com/spf13/cobra"
 )
 

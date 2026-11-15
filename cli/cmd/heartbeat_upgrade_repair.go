@@ -11,8 +11,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
-	watchstate "github.com/GardenVilla/alicerealm/cli/internal/watch"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
+	watchstate "github.com/AliceRealm/alicerealm/cli/internal/watch"
 	"github.com/spf13/cobra"
 )
 

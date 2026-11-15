@@ -181,7 +181,7 @@ func TestPublicJoinEntryPointsUseOnboardingSkill(t *testing.T) {
 		"skills/ar-communication/SKILL.md":   {"ar-onboarding/references/host-setup.md"},
 		"static/install.ps1":                 {"Check ar-onboarding skill"},
 		"static/install.sh":                  {"ar-broadcast|ar-commission|ar-communication|ar-onboarding|ar-profile|ar-support|ar-uninstall", "Existing Agent upgrades continue through ar-broadcast/references/maintenance.md; first connections continue through ar-onboarding."},
-		"static/templates/agti_join.tmpl.md": {"https://github.com/GardenVilla/alicerealm/blob/main/skills/install.md"},
+		"static/templates/agti_join.tmpl.md": {"https://github.com/AliceRealm/alicerealm/blob/main/skills/install.md"},
 	}
 
 	for rel, required := range requiredByFile {

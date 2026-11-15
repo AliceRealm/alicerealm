@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"bytes"
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -34,7 +34,7 @@ func TestHeartbeatInstalledProbeSignalRollback(t *testing.T) {
 	}
 	buildDir := t.TempDir()
 	oldPath := filepath.Join(buildDir, "old-cli")
-	build := exec.Command("go", "build", "-ldflags", "-X main.Version=0.0.47 -X github.com/GardenVilla/alicerealm/cli/internal/skills.VerifyPublicKeyBase64="+base64.StdEncoding.EncodeToString(pub), "-o", oldPath, ".")
+	build := exec.Command("go", "build", "-ldflags", "-X main.Version=0.0.47 -X github.com/AliceRealm/alicerealm/cli/internal/skills.VerifyPublicKeyBase64="+base64.StdEncoding.EncodeToString(pub), "-o", oldPath, ".")
 	build.Dir = ".."
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build CLI: %s %v", out, err)

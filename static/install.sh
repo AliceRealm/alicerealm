@@ -16,7 +16,7 @@ INSTALLER_SOURCE_COMMIT="development"
 CDN_URL="${ALICEREALM_CDN_URL:-https://updates.alicerealm.com}"
 # Site origin for the install-attribution report (separate from the binary CDN).
 ALICEREALM_API_URL="${ALICEREALM_API_URL:-https://alicerealm.com}"
-GITHUB_REPO="GardenVilla/alicerealm"
+GITHUB_REPO="AliceRealm/alicerealm"
 BRANCH="main"
 
 GREEN='\033[0;32m'
@@ -850,7 +850,7 @@ setup_agents() {
     # Aborting on every non-zero is the safe default; the message match below
     # only refines the hint, never the decision.
     mkt_status=0
-    mkt_out=$("$CODEX_BIN" plugin marketplace add GardenVilla/codex-alicerealm 2>&1) || mkt_status=$?
+    mkt_out=$("$CODEX_BIN" plugin marketplace add AliceRealm/codex-alicerealm 2>&1) || mkt_status=$?
     if [ "$mkt_status" != "0" ]; then
       case "$mkt_out" in
         *different\ source*|*already\ added\ from\ a\ different*)
@@ -881,7 +881,7 @@ setup_agents() {
       info "Codex plugin install failed:"
       [ -n "$add_err" ] && printf '%s\n' "$add_err" | tail -3
       info "Run manually:"
-      info "  $CODEX_BIN plugin marketplace add GardenVilla/codex-alicerealm"
+      info "  $CODEX_BIN plugin marketplace add AliceRealm/codex-alicerealm"
       info "  $CODEX_BIN plugin add codex-alicerealm@alicerealm"
       codex_plugin_result failed unavailable
       return 1
@@ -1016,7 +1016,7 @@ setup_agents() {
       | grep -F '"name":"alicerealm-marketplace"' | head -1) || cmc_entry=""
     [ -n "$cmc_entry" ] || return 1
     case "$cmc_entry" in
-      *GardenVilla/alicerealm-claude-plugin*) return 1 ;;
+      *AliceRealm/alicerealm-claude-plugin*) return 1 ;;
       *) return 0 ;;
     esac
   }
@@ -1061,7 +1061,7 @@ setup_agents() {
     export GIT_HTTP_LOW_SPEED_LIMIT GIT_HTTP_LOW_SPEED_TIME
 
     mkt_status=0
-    mkt_out=$(claude plugin marketplace add GardenVilla/alicerealm-claude-plugin 2>&1) || mkt_status=$?
+    mkt_out=$(claude plugin marketplace add AliceRealm/alicerealm-claude-plugin 2>&1) || mkt_status=$?
     if [ "$mkt_status" != "0" ]; then
       info "marketplace add failed: $(printf '%s' "$mkt_out" | tail -2)"
       info "If you are behind a proxy or a blocked network, configure it and re-run."
@@ -1086,7 +1086,7 @@ setup_agents() {
       info "Claude Code plugin install failed:"
       [ -n "$add_out" ] && printf '%s\n' "$add_out" | tail -3
       info "Run manually:"
-      info "  claude plugin marketplace add GardenVilla/alicerealm-claude-plugin"
+      info "  claude plugin marketplace add AliceRealm/alicerealm-claude-plugin"
       info "  claude plugin install alicerealm@alicerealm-marketplace --scope user"
     fi
   }

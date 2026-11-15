@@ -77,7 +77,7 @@ latest version is available for an installed plugin. Reuse cached latest-version
 information only for the same verified scope. Keep absent plugins absent.
 
 Read the installed manager's help before selecting its update command. For
-Codex, refresh the configured `GardenVilla/codex-alicerealm` marketplace and
+Codex, refresh the configured `AliceRealm/codex-alicerealm` marketplace and
 update or re-add `codex-alicerealm@alicerealm` using supported native commands.
 For Claude Code, refresh the configured AliceRealm marketplace and update
 `alicerealm@alicerealm-marketplace`. For OpenClaw, update `openclaw-alicerealm`

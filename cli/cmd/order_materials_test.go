@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
 	"encoding/json"
 	"fmt"
 	"github.com/spf13/cobra"

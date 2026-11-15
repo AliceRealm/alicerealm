@@ -44,16 +44,16 @@ curl -fsSL https://alicerealm.com/install.sh | sh -s -- --host codex
 ```
 
 The installer configures the invoking host and leaves other detected hosts
-alone. `EIGENFLUX_SETUP_HOSTS=all` or a comma-separated list is an explicit
+alone. `ALICEREALM_SETUP_HOSTS=all` or a comma-separated list is an explicit
 request to configure additional hosts; never use it unless the user requested
-those hosts too. `EIGENFLUX_SKIP_AGENT_SETUP=1` installs the CLI and Skills
+those hosts too. `ALICEREALM_SKIP_AGENT_SETUP=1` installs the CLI and Skills
 without changing any host integration.
 
 For WorkBuddy, Hermes, a generic terminal Agent, or any host without an
 official AliceRealm plugin, use the bare-CLI route and skip unrelated host setup:
 
 ```bash
-curl -fsSL https://alicerealm.com/install.sh | EIGENFLUX_SKIP_AGENT_SETUP=1 sh
+curl -fsSL https://alicerealm.com/install.sh | ALICEREALM_SKIP_AGENT_SETUP=1 sh
 ```
 
 The later `ar-onboarding` flow uses that host's native scheduler when one is
@@ -109,7 +109,7 @@ administrator privileges:
 | macOS / Linux | `~/.local/bin` | Added to the applicable shell startup file when needed. |
 | Windows | `D:\alicerealm` | Falls back to `%LOCALAPPDATA%\local\bin` when `D:` is unavailable and adds the directory to the user `PATH`. |
 
-Set `EIGENFLUX_INSTALL_DIR` before installation to choose another directory.
+Set `ALICEREALM_INSTALL_DIR` before installation to choose another directory.
 Privileged destinations require the matching operating-system privileges;
 prefer a user-writable location. Open a new terminal when a PATH update is not
 visible to the current shell.
@@ -117,13 +117,13 @@ visible to the current shell.
 macOS and Linux example:
 
 ```bash
-curl -fsSL https://alicerealm.com/install.sh | EIGENFLUX_INSTALL_DIR="$HOME/alicerealm" sh
+curl -fsSL https://alicerealm.com/install.sh | ALICEREALM_INSTALL_DIR="$HOME/alicerealm" sh
 ```
 
 Windows example:
 
 ```powershell
-$env:EIGENFLUX_INSTALL_DIR = "E:\alicerealm"
+$env:ALICEREALM_INSTALL_DIR = "E:\alicerealm"
 irm https://alicerealm.com/install.ps1 | iex
 ```
 
@@ -133,15 +133,15 @@ Keep the installer's per-binary installation record for scoped removal. Use
 `ar-uninstall` for removal, inspect the CLI preview, and stop the matching host
 triggers before applying it. Preserve account data and modified Skills.
 Leave host restart requests pending during background maintenance. Set
-`EIGENFLUX_ALLOW_HOST_RESTART=1` only when the user has authorized that restart.
+`ALICEREALM_ALLOW_HOST_RESTART=1` only when the user has authorized that restart.
 
-Each Agent runtime needs its own stable `EIGENFLUX_HOME`. Never derive it from
+Each Agent runtime needs its own stable `ALICEREALM_HOME`. Never derive it from
 the current working directory, task ID, temporary directory, or editable Agent
 name. Never point the current Agent at another Agent's Home or reuse another
 Agent's credentials.
 
-The CLI resolves the Home in this order: `--homedir`, `EIGENFLUX_HOME`, then
-`~/.alicerealm`. It appends `.alicerealm` when the selected path does not already
+The CLI resolves the Home in this order: `--homedir`, `ALICEREALM_HOME`, the
+legacy `EIGENFLUX_HOME`, then `~/.alicerealm`. It appends `.alicerealm` when the selected path does not already
 end with that name.
 
 - OpenClaw: the installer pins `~/.openclaw/.alicerealm`.
@@ -179,7 +179,7 @@ the pending restart. Report a failed authorized restart once with
 ### Codex
 
 The macOS/Linux installer installs the official `codex-alicerealm@alicerealm`
-plugin from `GardenVilla/codex-alicerealm`. It provides AliceRealm tools and Skills
+plugin from `AliceRealm/codex-alicerealm`. It provides AliceRealm tools and Skills
 synchronization in Codex. Its user-level plugin files and registration may be
 shared by Codex tasks; it is not isolated to the current project. Preserve
 unrelated configuration and other hosts. The user can uninstall it with
@@ -249,7 +249,7 @@ through the installed maintenance rules.
 ## Verify and continue
 
 Resolve the installer's selected Home to one absolute `<agent-home>`, preserving
-an explicit `--homedir` or `EIGENFLUX_HOME` before using the host defaults above.
+an explicit `--homedir` or `ALICEREALM_HOME` before using the host defaults above.
 Pass this same Home to verification and onboarding commands. The installer's
 child-shell environment does not configure the calling Agent's shell.
 
@@ -261,7 +261,7 @@ alicerealm --homedir "<agent-home>" skills path --host "<skill-host>"
 Set `<skill-host>` to the selected Skill target: `openclaw`, `codex`, or
 `claude-code` for the corresponding macOS/Linux integration; `terminal` for
 bare-CLI and the Windows installer's shared Skill directory. Preserve an
-explicit `EIGENFLUX_SKILLS_DIR` or Home-scoped registered target and verify that
+explicit `ALICEREALM_SKILLS_DIR` or Home-scoped registered target and verify that
 the current host loads that directory.
 
 Verify the selected host integration through its native plugin listing and

@@ -88,7 +88,7 @@ build_and_install_cli() {
 
   mkdir -p "$PROJECT_ROOT/build"
   BUILD_STAGE="$(mktemp -d "$PROJECT_ROOT/build/local-install.XXXXXX")"
-  "${GO_CMD[@]}" build -ldflags "-X main.Version=${CLI_VERSION} -X main.Commit=${CLI_COMMIT} -X github.com/GardenVilla/alicerealm/cli/internal/skills.VerifyPublicKeyBase64=${ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY}" -o "$BUILD_STAGE/alicerealm" .
+  "${GO_CMD[@]}" build -ldflags "-X main.Version=${CLI_VERSION} -X main.Commit=${CLI_COMMIT} -X github.com/AliceRealm/alicerealm/cli/internal/skills.VerifyPublicKeyBase64=${ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY}" -o "$BUILD_STAGE/alicerealm" .
 
   if [[ "$INSTALL_OS" == Darwin ]]; then
     local arch

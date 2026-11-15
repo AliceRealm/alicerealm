@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
-	capabilitycache "github.com/GardenVilla/alicerealm/cli/internal/capabilities"
-	"github.com/GardenVilla/alicerealm/cli/internal/output"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
+	capabilitycache "github.com/AliceRealm/alicerealm/cli/internal/capabilities"
+	"github.com/AliceRealm/alicerealm/cli/internal/output"
 	"github.com/spf13/cobra"
 )
 

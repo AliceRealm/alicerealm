@@ -26,9 +26,9 @@ if [[ "${GITHUB_ACTIONS:-}" != "true" ]]; then
   if [[ "$PHASE" != --all ]]; then
     echo "Preparation/publication phases require the main workflow; use the default command to dispatch." >&2; exit 1
   fi
-  exec gh workflow run release-skills.yml --repo GardenVilla/alicerealm --ref main
+  exec gh workflow run release-skills.yml --repo AliceRealm/alicerealm --ref main
 fi
-if [[ "${GITHUB_WORKFLOW_REF:-}" != "GardenVilla/alicerealm/.github/workflows/release-skills.yml@refs/heads/main" ]]; then
+if [[ "${GITHUB_WORKFLOW_REF:-}" != "AliceRealm/alicerealm/.github/workflows/release-skills.yml@refs/heads/main" ]]; then
   echo "Skills publishing requires the Release Skills workflow on main" >&2
   exit 1
 fi
@@ -68,11 +68,11 @@ DERIVED_SKILLS_PUBLIC_KEY=$(cd "$CLI_DIR" && "${GO_CMD[@]}" run ./cmd/manifestge
 }
 
 ( cd "$CLI_DIR" && "${GO_CMD[@]}" build \
-    -ldflags "-X github.com/GardenVilla/alicerealm/cli/internal/skills.VerifyPublicKeyBase64=${ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY}" \
+    -ldflags "-X github.com/AliceRealm/alicerealm/cli/internal/skills.VerifyPublicKeyBase64=${ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY}" \
     -o "$BUILD_DIR/manifestcheck" ./cmd/manifestcheck )
 for tool in releaseverify clirelease; do
   ( cd "$CLI_DIR" && "${GO_CMD[@]}" build \
-      -ldflags "-X github.com/GardenVilla/alicerealm/cli/internal/skills.VerifyPublicKeyBase64=${ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY}" \
+      -ldflags "-X github.com/AliceRealm/alicerealm/cli/internal/skills.VerifyPublicKeyBase64=${ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY}" \
       -o "$BUILD_DIR/$tool" "./cmd/$tool" )
 done
 SKILLS_SEQUENCE=$(python3 "$SCRIPT_DIR/skills-release-state.py" prepare --build "$BUILD_DIR")

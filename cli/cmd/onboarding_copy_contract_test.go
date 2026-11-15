@@ -271,7 +271,7 @@ func TestWorkBuddyCommunityAttachmentContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, marker := range []string{"https://raw.githubusercontent.com/GardenVilla/alicerealm/", "immediately after the invitation text", "Do not call `present_files`", "Do not deliver both forms preemptively", "final scheduling question remains last"} {
+	for _, marker := range []string{"https://raw.githubusercontent.com/AliceRealm/alicerealm/", "immediately after the invitation text", "Do not call `present_files`", "Do not deliver both forms preemptively", "final scheduling question remains last"} {
 		if !strings.Contains(string(b), marker) {
 			t.Errorf("missing inline QR boundary: %s", marker)
 		}

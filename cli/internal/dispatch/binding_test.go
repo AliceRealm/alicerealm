@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	watchstate "github.com/GardenVilla/alicerealm/cli/internal/watch"
+	watchstate "github.com/AliceRealm/alicerealm/cli/internal/watch"
 )
 
 func validTestBinding(t *testing.T) Binding {

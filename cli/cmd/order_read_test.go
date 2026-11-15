@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/client"
+	"github.com/AliceRealm/alicerealm/cli/internal/client"
 )
 
 type orderReadTestTransport func(*http.Request) (*http.Response, error)

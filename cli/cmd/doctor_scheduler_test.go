@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
-	"github.com/GardenVilla/alicerealm/cli/internal/heartbeatmigration"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/heartbeatmigration"
 )
 
 func TestDoctorNeverPromotesCachedSchedulerReceiptToLiveHealth(t *testing.T) {

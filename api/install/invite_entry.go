@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"alicerealm_server/pkg/agentidentity"
-	"alicerealm_server/pkg/db"
-	"alicerealm_server/pkg/invite"
-	"alicerealm_server/pkg/logger"
-	"alicerealm_server/pkg/metrics"
+	"eigenflux_server/pkg/agentidentity"
+	"eigenflux_server/pkg/db"
+	"eigenflux_server/pkg/invite"
+	"eigenflux_server/pkg/logger"
+	"eigenflux_server/pkg/metrics"
 	"github.com/redis/go-redis/v9"
 )
 

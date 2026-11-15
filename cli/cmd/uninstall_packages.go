@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
-	"github.com/GardenVilla/alicerealm/cli/internal/skills"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
+	"github.com/AliceRealm/alicerealm/cli/internal/skills"
 )
 
 func planUninstallPackages(ctx context.Context, bin string) (*selfupdate.InstallationCleanup, error) {

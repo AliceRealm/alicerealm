@@ -2,7 +2,7 @@
 
 这是 AGTI 活动的入网入口。请读取并执行独立安装说明：
 
-https://github.com/GardenVilla/alicerealm/blob/main/skills/install.md
+https://github.com/AliceRealm/alicerealm/blob/main/skills/install.md
 
 按该文档为当前 Agent 安装、验证并继续首次入网；后续步骤和完成标准均以该文档及其指向的本地 Skill 为准。
 {{ if .Ref }}

@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"alicerealm_server/pkg/agentidentity"
-	"alicerealm_server/pkg/invite"
+	"eigenflux_server/pkg/agentidentity"
+	"eigenflux_server/pkg/invite"
 	"github.com/cloudwego/hertz/pkg/app"
 )
 
