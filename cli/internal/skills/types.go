@@ -1,0 +1,150 @@
+// Package skills implements CLI-owned distribution of AliceRealm skills.
+//
+// Skills are bundled alongside the CLI binary and pulled into each host's real
+// skill-load directory by `alicerealm skills sync`.
+// This decouples skill updates from plugin releases: bumping the CLI patch ships
+// new skills to every host on its next startup sync — zero plugin republish.
+//
+// The hot path is hardened against the failure modes that matter for a tool that
+// overwrites a directory other agents read live: whole-directory atomic swap
+// (rename×2 + journal + fsync parent), per-skill sha256 verification, a
+// managed_by safety lock so reconcile never deletes skills it did not install,
+// and first-install preservation of unrelated/third-party skill folders.
+package skills
+
+import "net/http"
+
+const (
+	// ManagedByValue marks a local manifest as written by this tool. reconcile
+	// only ever removes skills recorded under a manifest carrying this marker —
+	// user-placed or foreign skill folders are never touched.
+	ManagedByValue = "alicerealm-cli"
+
+	// ManifestFileName is the local manifest written into the skills dir.
+	ManifestFileName = ".ef-manifest.json"
+	// RemoteManifest is the manifest object name on R2.
+	RemoteManifest = "manifest.json"
+	// TarName is the skills archive object name on R2.
+	TarName = "skills.tar.gz"
+	// TarSHAName is the bare-hash sidecar object name on R2.
+	TarSHAName = "skills.tar.gz.sha256"
+	// StaleMarkerName is dropped by the GitHub bootstrap fallback so the next
+	// online sync knows the local copy is provisional and must be replaced.
+	StaleMarkerName = ".ef-stale"
+
+	// Fixed staging / recovery slots. Safe to use fixed names because all access
+	// is serialized by the exclusive lock — no pid randomization needed.
+	newSuffix     = ".ef-new"      // real + newSuffix: staged next version
+	oldSuffix     = ".ef-old"      // real + oldSuffix: previous version during swap
+	journalSuffix = ".ef-swapping" // real + journalSuffix: swap-in-progress marker
+	lockFileName  = ".ef-skills.lock"
+
+	dirPerm          = 0o700 // mirror cache.go
+	skillFilePerm    = 0o644 // skill files must be world-readable: agents read SKILL.md
+	manifestFilePerm = 0o600 // local metadata, mirror cache.go credentials perms
+
+)
+
+// CDNDefault is the public update base; overridable via ALICEREALM_CDN_URL.
+const CDNDefault = "https://updates.alicerealm.com"
+
+// Manifest is the authoritative description of a skills bundle. The content
+// `revision` (plus per-skill sha256) is authoritative; cli_version is
+// informational and display_version is cosmetic — both may be empty.
+type Manifest struct {
+	// Sequence is a monotonically increasing release number. Clients reject a
+	// lower sequence and reject different content at the same sequence, so a
+	// stale CDN object can never roll Skills back.
+	Sequence uint64 `json:"sequence"`
+	// KeyID identifies the trusted Ed25519 signing key. Signature covers every
+	// manifest field except Signature itself.
+	KeyID     string `json:"key_id"`
+	Signature string `json:"signature"`
+	// Revision is the content fingerprint of the bundle (hash over the sorted
+	// per-skill sha256s). It is the freshness key — skills update when this
+	// changes, INDEPENDENT of the CLI binary version. This is what makes a skill
+	// edit a `release-skills` (upload to R2) rather than a CLI republish.
+	Revision string `json:"revision"`
+	// MinCLIVersion gates compatibility: a CLI older than this must not adopt
+	// the bundle (the skills may reference newer CLI commands). Empty = no floor.
+	MinCLIVersion string `json:"min_cli_version,omitempty"`
+	// CLIVersion is the CLI that built the bundle — informational only, NOT used
+	// for the update decision (that was the original design flaw).
+	CLIVersion  string       `json:"cli_version,omitempty"`
+	ManagedBy   string       `json:"managed_by"`
+	GeneratedAt int64        `json:"generated_at,omitempty"`
+	TarSHA256   string       `json:"tar_sha256,omitempty"`
+	Skills      []SkillEntry `json:"skills"`
+}
+
+// SkillEntry is one skill's identity within a manifest.
+type SkillEntry struct {
+	Name           string `json:"name"`
+	SHA256         string `json:"sha256"`
+	DisplayVersion string `json:"display_version,omitempty"`
+}
+
+// names returns the set of skill names in the manifest.
+func (m *Manifest) names() map[string]string {
+	out := make(map[string]string, len(m.Skills))
+	for _, s := range m.Skills {
+		out[s.Name] = s.SHA256
+	}
+	return out
+}
+
+// SyncOptions configures a Sync run.
+type SyncOptions struct {
+	Into         string       // explicit target dir; highest precedence
+	Host         string       // openclaw|claude-code|codex|terminal; "" => autodetect
+	CLIVersion   string       // current binary version, supplied by the cmd layer
+	CDNBase      string       // default CDNDefault
+	IfStale      bool         // background mode: keep local silently on fetch failure (revision match always short-circuits the download)
+	Quiet        bool         // allow intact local fallback on network failure; never hide IO errors
+	FromBundle   bool         // offline-first-install: fall back to BundleDir
+	BundleDir    string       // local skills dir for InstallFromBundle / fallback
+	ForceManaged bool         // replace edited managed skills; local development installs only
+	Allowlist    []string     // explicit local/test allowlist; remote sync trusts the verified manifest
+	HTTPClient   *http.Client // injectable for tests
+}
+
+func (o SyncOptions) allowlist() []string { return o.Allowlist }
+
+func (o SyncOptions) cdnBase() string {
+	if o.CDNBase != "" {
+		return o.CDNBase
+	}
+	return CDNDefault
+}
+
+// SyncResult is the structured outcome of a Sync run.
+type SyncResult struct {
+	// RetentionCode identifies an incomplete update that kept usable local rules.
+	RetentionCode      string   `json:"retention_code,omitempty"`
+	TargetRevision     string   `json:"target_revision,omitempty"`
+	RequiredCLIVersion string   `json:"required_cli_version,omitempty"`
+	SkillsDir          string   `json:"skills_dir"`
+	Source             string   `json:"source"` // cli/<ver> | cli/latest | local | bundle
+	CLIVersion         string   `json:"cli_version"`
+	VerifiedManifest   bool     `json:"verified_manifest"`
+	Removed            []string `json:"removed,omitempty"`
+	// Preserved lists skills kept verbatim instead of updated — third-party
+	// folders and skills the user hand-edited. Surfaced so a user stuck on a
+	// local fork (which would otherwise never receive updates) can see why.
+	Preserved   []string         `json:"preserved,omitempty"`
+	Diagnostics []SyncDiagnostic `json:"diagnostics,omitempty"`
+	Stale       bool             `json:"stale"`
+	NoNetwork   bool             `json:"no_network"`
+	Atomic      bool             `json:"atomic"`
+}
+
+// SyncDiagnostic explains why installed content was retained and how to repair it.
+type SyncDiagnostic struct {
+	Path           string `json:"path"`
+	Reason         string `json:"reason"`
+	LocalVersion   string `json:"local_version,omitempty"`
+	TargetVersion  string `json:"target_version,omitempty"`
+	LocalRevision  string `json:"local_revision,omitempty"`
+	TargetRevision string `json:"target_revision,omitempty"`
+	Hint           string `json:"hint"`
+}

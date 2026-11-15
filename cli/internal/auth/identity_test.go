@@ -1,0 +1,95 @@
+package auth
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestLoadOrCreateIdentityIsStableAndPrivate(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ALICEREALM_HOME", dir)
+	publicOne, privateOne, created, err := LoadOrCreateIdentity("test")
+	if err != nil || !created {
+		t.Fatalf("first identity create: created=%v err=%v", created, err)
+	}
+	publicTwo, privateTwo, createdAgain, err := LoadOrCreateIdentity("test")
+	if err != nil || createdAgain {
+		t.Fatalf("second identity load: created=%v err=%v", createdAgain, err)
+	}
+	if !bytes.Equal(publicOne, publicTwo) || !bytes.Equal(privateOne, privateTwo) {
+		t.Fatal("identity changed across repeated loads")
+	}
+	path := filepath.Join(dir, ".alicerealm", "servers", "test", "identity.json")
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validatePrivateFilePermissions(info); err != nil {
+		t.Fatalf("created identity permissions: %v", err)
+	}
+	if IdentityFingerprint(publicOne) == "" {
+		t.Fatal("empty identity fingerprint")
+	}
+}
+
+func TestLoadOrCreateIdentitySeparatesHomes(t *testing.T) {
+	homeOne := t.TempDir()
+	homeTwo := t.TempDir()
+	t.Setenv("ALICEREALM_HOME", homeOne)
+	publicOne, _, createdOne, err := LoadOrCreateIdentity("alicerealm")
+	if err != nil || !createdOne {
+		t.Fatalf("create first Home identity: created=%v err=%v", createdOne, err)
+	}
+
+	t.Setenv("ALICEREALM_HOME", homeTwo)
+	publicTwo, _, createdTwo, err := LoadOrCreateIdentity("alicerealm")
+	if err != nil || !createdTwo {
+		t.Fatalf("create second Home identity: created=%v err=%v", createdTwo, err)
+	}
+	if bytes.Equal(publicOne, publicTwo) {
+		t.Fatal("different AliceRealm Homes reused the same public key")
+	}
+}
+
+func TestLoadOrCreateIdentityRejectsSymlink(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ALICEREALM_HOME", dir)
+	identityDir := filepath.Join(dir, ".alicerealm", "servers", "test")
+	if err := os.MkdirAll(identityDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(dir, "target")
+	if err := os.WriteFile(target, []byte("secret"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(identityDir, "identity.json")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if _, _, _, err := LoadOrCreateIdentity("test"); err == nil {
+		t.Fatal("symlink identity path was accepted")
+	}
+	if _, _, err := LoadIdentity("test"); err == nil {
+		t.Fatal("read-only identity load accepted a symlink")
+	}
+}
+
+func TestLoadIdentityReadsExistingKeyWithoutCreatingMissingFiles(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ALICEREALM_HOME", dir)
+	if _, _, err := LoadIdentity("missing"); !os.IsNotExist(err) {
+		t.Fatalf("missing identity error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".alicerealm", "servers", "missing")); !os.IsNotExist(err) {
+		t.Fatalf("read-only identity load created a directory: %v", err)
+	}
+	public, private, _, err := LoadOrCreateIdentity("existing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	loadedPublic, loadedPrivate, err := LoadIdentity("existing")
+	if err != nil || !bytes.Equal(public, loadedPublic) || !bytes.Equal(private, loadedPrivate) {
+		t.Fatalf("existing identity changed: %v", err)
+	}
+}

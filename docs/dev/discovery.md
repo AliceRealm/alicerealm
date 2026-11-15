@@ -1,0 +1,1159 @@
+# Search and Recommendation MVP
+
+The server-controlled `ENABLE_NEED_SEARCH` switch enables the three-kind,
+discovery pipeline with rule gates and optional broadcast LR ordering. Its default is `false`. With the switch enabled,
+unified APIs and CLI capabilities appear when the existing `ENABLE_CONSOLE_V2`
+gateway is enabled, and existing Feed/commission query and
+recommendation routes use the new engine, including explicit commission-ID
+lookup through the compatibility HTTP interfaces. There is no per-user opt-in or new feedback type.
+
+The [PRD](../design/need-search-mvp/prd.md), [design](../design/need-search-mvp/design.md)
+and [Owner decisions](../design/need-search-mvp/questions.md) define the product.
+This document describes the executable contracts and operation of this implementation.
+The [workflow and code review index](../design/need-search-mvp/flow-and-code-index.md)
+maps the complete serving path to implementation files.
+
+## Entry points
+
+All unified routes use the existing V2 Agent authentication and completed-onboarding
+checks. The owner is derived from authentication; a body cannot override it.
+IDs on HTTP/CLI JSON are decimal strings. Bodies reject unknown fields and are
+limited to 64 KiB. Commission requests retain the existing allowlist; an omitted
+kind list requests all three kinds and therefore also requires commission access.
+An explicitly scoped broadcast/Agent request does not require commission access.
+
+| Method | Path | Scope | Input |
+|---|---|---|---|
+| POST | `/api/v2/discovery/search` | `feed:read` | Exactly one of `query`, `commission_id`, `need_id`, `need` |
+| POST | `/api/v2/discovery/recommendations` | `feed:read` | Optional `source_kinds`, `need_ids`, explicit `filters`/`defaults` |
+
+Search defaults to 20 results per page, maximum 50 per page. Default kind order is
+`broadcast, commission, agent`. Search selects results round-robin across kinds,
+prioritizing eligible exact matches within each kind. Each selected page is then
+grouped into contiguous type blocks in requested kind order, with exact matches
+at the front of their own block. The wire shape remains the existing `items`
+array; empty kinds add no placeholder. Grouping does not move candidates between
+pages or compare scores across kinds. The final page order is frozen before
+cursor delivery and replay position assignment. Existing cached responses and
+search snapshots retain their frozen order until expiry. Automatic discovery
+defaults to 20 results, accepts `limit` from 1 to 100, and returns at most that
+number across all kinds, considering at most five eligible captured Needs,
+ordered by input priority (omitted means 0), input creation time descending, then
+input ID ascending. After selection, its results are also grouped by type;
+this presentation order does not change which Needs win the total limit.
+Explicit Need kinds must agree with the request. Intent
+lifecycle and version determine eligibility; there is no separate Need CRUD API.
+
+```json
+{"query":"landing page design","source_kinds":["commission"],"limit":20,
+ "filters":{"budget_max_fen":50000,"currency":"CNY"}}
+```
+
+Filters apply to every requested kind. Price/delivery constraints require
+commission-only scope. Query prose is not parsed into guaranteed price, language,
+region or exclusion constraints. Missing required evidence rejects a candidate.
+Provider region never inherits owner geography. Language defaults require
+`defaults.language="card"` on raw queries/recommendations. Captured and inline
+Need forms only use their explicit input constraints; search does not inherit
+Card defaults for `need`/`need_id`.
+
+Language matching accepts the historical Card display names `English` as `en`
+and `Chinese` / `中文` as `zh`, with ASCII case-insensitive names and standard
+codes. ES keyword filters, authoritative checks and Need/request intersections
+use the same compatibility classes. Locale/script subtags remain exact:
+`en` does not match `en-US`, and `zh` does not match `zh-CN` or `zh-TW`.
+Other names and composite prose such as `English · Chinese` remain unchanged
+and are not interpreted. Original Card/Need values, effective-filter evidence
+and candidate language evidence remain unchanged in storage and samples.
+Compatibility reads existing ES/Redis projections without reindexing, backfill
+or embedding calls. New compiler versions bypass old compiled-value cache keys;
+owner/Need-selection cache values retain their original source evidence.
+Already frozen idempotent responses and search/Feed pages keep their existing
+snapshot until expiry; a new request observes the corrected matching behavior.
+
+Explicit query searches that include Agents first resolve current database
+identity fields: decimal `agent_id`, case-sensitive five-letter `short_id`, then
+whole-name equality against `agent_name` or `agent_name_en`. Leading/trailing
+query whitespace is trimmed; short IDs and names are not case-folded. Short-ID
+hits take precedence over names. Same-name Agents can produce multiple results,
+bounded to 100 candidates and the normal response limit. Exact matches replace
+the Agent semantic candidate pool for that request, including when hard filters
+subsequently exclude every match. Other requested kinds retain their own search.
+They still undergo public Card hydration, active-account, self, block and hard
+filter checks, but do not require semantic score/activity thresholds. Results
+carry `match.exact` (`agent_id`, `short_id`, or `name`) and `exact_match` score kind;
+samples use scorer version `agent_identity_v1`. Exact hits precede ordinary
+results only inside their own type block. A limit-1 mixed search selects the
+first available requested kind; Agent-only searches still lead with exact hits.
+Same-name hits retain stable ID ordering; identity priority bypasses no filter.
+
+Agent-only exact hits do not call embedding or ES. Numeric queries with no match
+(including out-of-range IDs) return no Agent results rather than fuzzy matches.
+Non-numeric text without an identity/name hit continues ordinary text retrieval:
+a five-letter word can be prose as well as a short ID, so a wrong-case short ID
+may produce semantic results but never an exact short-ID match. Names come from
+current `agents` identity fields rather than the asynchronously rebuilt Card;
+Agent previews also use the current public display name. This lookup reuses the
+existing database and needs no new schema, ES mapping or backfill. Saved/inline
+Needs and automatic recommendations retain their existing matching behavior.
+
+### Exact Commission search
+
+`POST /api/v2/discovery/search` accepts `{"commission_id":"123"}` as an
+alternative to `query`, `need_id`, or `need`. The ID must be a positive int64
+encoded as a decimal string. Omitted kinds select only `commission`; explicitly
+supplying any other scope is invalid. Recommendation does not accept this field.
+The CLI entry point is `eigenflux search --commission-id 123` (0.0.58+).
+
+This path skips embedding and uses an ES `commission_id` term filter with
+`active=true` and a one-result bound. The existing generation-specific Redis
+forward hydration, source version checks, visibility/block/self checks and hard
+filters still apply. Missing, inactive, filtered or mismatched projections return
+an empty result without broadening. Identity scoring bypasses relevance thresholds
+and records `commission_identity_v1`, `score_kind=exact_match` and
+`match.exact=commission_id`. Delivery, retries and samples use the new pipeline.
+Numeric `query` text remains ordinary Commission text search; titles do not imply
+exact ID matching. No ES schema or catalogue RPC changes are required.
+
+The existing `/api/v1/commissions/search` and `/api/v2/commissions/search`
+interfaces retain their query parameters, access controls and candidate response
+shape. With Need search enabled, both query and explicit `commission_id` requests
+use Feed discovery internally. With it disabled they retain the legacy backend.
+Skills direct Agents to the unified CLI command rather than compatibility routes.
+
+### Commission comparison fields
+
+Commission results in unified discovery `items[]` and compatibility Commission
+search/recommendation `candidates[]` expose optional flat `title`, `price_fen`,
+`currency` and `promised_delivery_ms`, alongside the existing ID, score and
+ranking evidence. Broadcast and Agent results do not acquire these fields.
+Title/currency are strings; price and promised duration are int64 JSON numbers
+in fen and milliseconds. Known zero prices are retained. Missing fields from
+older projections, RPCs or frozen responses remain omitted; clients must not
+invent zero values or infer currency.
+
+The summaries reuse the selected Commission's existing version-checked source
+evidence. They do not add a per-result orderable call or change eligibility,
+ranking, pagination, attribution or the frozen-response boundary. A discovery
+summary can become stale after selection. Before Order creation, read
+`commission orderable` for the authoritative current published contract. Its
+CLI fields are under `definition` and `revision.content`; see the complete
+[response and type contract](commission.md#discovery-summaries-and-authoritative-ordering-terms).
+
+### Deterministic query processing
+
+All explicit queries, captured/inline Need text and owner-context clauses pass
+through `queryprocessing.Process(text, options)`. This pure stage uses NFKC,
+Unicode case folding and whitespace collapse, preserves original text alongside
+normalized text, and adds phrase evidence for short unspaced CJK queries.
+Latin text uses existing index analyzers. Mixed text is not translated or expanded.
+Exact Agent identity resolution runs first on original text and preserves case.
+Need source JSON and explicit hard filters remain unchanged.
+
+There is no vocabulary asset, canonical intent lookup, alias expansion, inferred
+category, structured-intent recall or slot relevance score. Removed request
+fields `category`, `subtype`, `intents` and `taxonomy_version` are rejected by
+strict decoding rather than silently ignored. The metadata lookup route and
+CLI command are absent. Historical input/snapshot JSON remains unchanged.
+
+`query_rules_v2` analysis is frozen in samples and participates in the versioned
+Need vector cache. Query/context compilation uses `context_rules_v7`; Need compilation uses
+`need_input_context_v6`.
+Stored Needs read asynchronous vectors. Explicit queries and unsaved inline
+Needs may call embedding on demand. Online vector lookup and model calls have a
+fixed 2-second timeout; an earlier parent deadline or cancellation still applies.
+An optional-stage timeout retains lexical retrieval; caller cancellation still
+propagates. Asynchronous vector production keeps its separate worker budget.
+Agent-context fallback is lexical-only:
+it neither calls a model nor schedules vector work, and carries no artificial
+embedding failure warning. Empty broadcast baseline uses existing recall lists.
+
+Internal Intent clauses accept up to 2,001 Unicode runes (two 1,000-rune fields
+plus their separator), independently of the explicit query weighted-length limit.
+Oversized internal clauses are shortened at a rune boundary and marked
+`context_query_truncated`; stored inputs remain unchanged.
+
+Broadcast keyword and dense (kNN) ES queries exclude expired documents before
+the candidate limit, while accepting documents without an expiry, so expired
+documents do not take top-k slots. The request-local execution clock is used
+for this predicate, including simulated executions. Current PostgreSQL state
+and expiry are still checked after hydration. This adds no recall channel or ES
+query per request.
+
+Public `match.match_types` contains deduplicated `exact`, `keyword`, `semantic`
+and `recall` labels. These describe retrieval paths, not confidence or guaranteed
+literal equality. Query text and vectors never appear in result cards.
+
+
+Responses include `pipeline_version`, `input_origin`, `context_id`,
+`effective_filters`, `constraint_mode`, `result_status`, partial/fallback reasons,
+and typed `source_ref` results. Only broadcasts include `item_id`. Per-result
+match metadata contains scorer type/version/kind. Numeric ranking scores stay in
+internal serving envelopes/samples; the existing commission compatibility DTO
+retains its numeric score contract.
+Internal private context snapshots and feature vectors are not returned in results.
+Search returns `has_more` and, when another page exists, an opaque `next_cursor`.
+Repeat the original request body (query/input, kinds, filters, defaults, and limit)
+with `cursor=next_cursor` to continue. Each page can use its own idempotency key;
+reusing the first page's key for a different cursor is a body conflict. Repeating
+the same cursor returns the same page without another exposure record.
+Recommendations have no continuation cursor; `limit` is a ceiling, not a quota.
+Insufficient eligible candidates return fewer results without relaxing constraints.
+
+Automatic fallback is decided independently for each requested kind. At most
+five captured contexts plus five owner-context clauses are compiled; retrieval
+retains its six-channel concurrency bound. Execute
+selected Needs for covered kinds; only missing kinds use frozen current Agent
+context. If context is empty, only a missing broadcast kind receives the hot/new
+baseline. Missing Agent/commission kinds contribute no candidates. If there are
+no contexts at all, return `insufficient_context`. An active constrained or
+unresolved Need never enables fallback for its own kind. Explicit `need_ids`
+execute only the selected Needs without supplemental fallback. Captured Need
+candidates enter the total result limit before fallback candidates; presentation
+still groups the selected page by kind. Partial coverage reports
+`missing_kind_needs` when using Agent context, and empty context reports
+`empty_agent_context`. No-Need context fallback retains `no_active_needs`.
+Other empty statuses are `no_match`, `below_threshold`,
+and `exhausted`. These are successful HTTP 200 / `code=0` responses, not
+transport errors. An empty kind contributes no candidates to merge; remaining
+kinds still return normally. All three kinds may be empty (`items: []`,
+`has_more: false`), and Feed still assembles its control-context delivery, cadence,
+notifications and other envelope fields. Required source and serving-state failures return errors; optional
+recall failures are explicitly partial.
+
+### Search pagination and execution snapshots
+
+`CompiledContext` is the reusable retrieval value: source query/constraints,
+query analysis, origin, source revision and Need provenance. It contains no
+request ID, clock, vector or runtime warnings. Each execution creates a fresh
+`Context` wire snapshot from that value, validates deadlines against its own
+request time, and reads the current Need vector cache. Pending-vector warnings
+are never frozen into a compiled value. Request filters are intersected on a
+private copy, never on shared cached state.
+
+The serving path no longer inserts into `discovery_contexts`. Delivered samples
+already carry the full execution contexts, provenance, request time and scoring
+evidence in the existing replay stream/table. Cache eviction cannot change those
+samples or frozen search pages. Historical context rows retain their existing
+expiry cleanup; no table drop or schema migration is required.
+
+### Context value cache
+
+`pkg/cache.DiscoveryCache` provides Redis read-through caching and process-local
+singleflight (concurrent miss deduplication, not an in-memory value cache).
+`rpc/sort/discovery/input_cache.go` caches automatic Need selection and owner
+context. `context.go` caches compilation for all input adapters. Explicit Need
+ownership/currentness and inline Intent authorization still read the authority.
+
+| Value | Validity | Key identity |
+| --- | --- | --- |
+| Owner context | 30 seconds; empty clauses 5 seconds | Owner + cache generation + reader schema |
+| Automatic Need selection | 30 seconds; empty selection 5 seconds; at most the earliest selected deadline | Owner + generation + requested kinds |
+| Compiled retrieval value | 15 minutes | Owner + generation + source input/revision, compilation options and compiler/query-processing versions |
+
+Keys use `cache:discovery:v1:{owner}:<generation>:<scope>:<digest>`;
+`cache:discovery:v1:{owner}:generation` is a random token with a 24-hour TTL.
+Tokens are never reused after expiry. Payloads include an absolute validity
+boundary, so a deadline or empty-result boundary is checked even if the Redis
+key still exists. Expired selections reload the bounded DB selection, allowing
+the next eligible Need to replace an expired one. Source text never enters keys.
+
+After successful API Need capture/batch capture, Intent/context mutation,
+onboarding confirmation, and successful Card projection rebuild, replace the
+owner's generation. Old in-flight fills remain in the old namespace and cannot
+poison subsequent requests. Old keys expire naturally. These hooks run after
+source commits; failed source writes do not invalidate. Redis invalidation is
+best effort with a bounded timeout; TTL bounds missed hooks and out-of-band SQL
+changes to at most 30 seconds for input selection (5 seconds for empty input).
+An already-running request may finish using its initial snapshot. Frozen
+idempotent responses/pages deliberately keep their original snapshot.
+
+Redis failure bypasses this optional cache and reads the authoritative source;
+source failures propagate and are never cached as empty values. There is no
+stale-while-revalidate extension. Request cancellation does not cancel another
+caller's shared fill, which has its own two-second timeout. Each consumer
+unmarshals its own copy. Metrics `discovery_context_cache_total{scope,outcome}`
+report hits, misses and cache errors without owner IDs or text in labels.
+
+### Frozen search pages
+
+Feed asks Sort for one bounded search ranking (at most 200 eligible candidates
+within existing recall budgets). Feed stores it once in an owner-scoped Redis
+`discovery:search:<owner>:<random-session>` snapshot for 24 hours, matching the
+response-cache lifetime. Random per-page tokens select fixed page boundaries;
+query, filters, kinds and page size cannot change during a continuation. Pages
+retain the original context and impression, with absolute sample positions.
+Only returned rows are recorded. Subsequent pages use frozen public details and
+scores without reranking, rehydration or a final Revalidate call. A new search
+observes current source/Need state. `has_more=false` means this bounded ranked
+snapshot is exhausted, not that the entire ES corpus has been enumerated.
+
+Malformed/tampered tokens return 400, changed request fields return 409, and an
+expired or foreign-owner snapshot returns 410 `search_cursor_expired`; restart
+without a cursor and with a new idempotency key. Required snapshot-cache failures
+return errors rather than silently restarting the search. Per-page delivery
+markers suppress duplicate recording on cursor retries; history and sample writes
+remain independent best-effort operations and are not an atomic transaction with
+cache state.
+
+## Service boundaries and storage
+
+- `rpc/sort/discovery`: typed contracts, input adapters, operation dispatch, compiler, hard filters, rule scorers and bounded orchestration.
+- `rpc/sort/discovery/queryprocessing`: mandatory text processing shared by explicit, Need-derived and Agent-context queries.
+- `rpc/sort/discovery/store.go`: retention cleanup for historical execution rows.
+- `pkg/need/reader.go`: owner-scoped current Need inputs, bounded selection and inline Intent checks.
+- `rpc/sort/discovery/need.go`: compile those inputs into reusable retrieval values.
+- `rpc/sort/discovery/context.go`, `input_cache.go`: reusable values, per-request execution binding and cached input reads.
+- `pkg/cache/discovery.go`: shared cache/generation protocol and source-writer invalidation.
+- `rpc/sort/discovery/source.go` and `source_query.go`: existing broadcast/commission indices and public Agent index, with registered Redis forward projections and bounded source-state checks.
+- `rpc/sort/discovery/index`: source evidence schema, normalization and forward storage shared with index writers.
+- `rpc/sort/discovery/transport`: shared RPC JSON response codec.
+- `rpc/sort/legacy/discovery_policy.go`: existing freshness, boost, injection and source-limit policies, after eligibility.
+- `rpc/feed/delivery`: response/page caching and independent best-effort exposure recording.
+- `pkg/featureindex/agent.go`: public Card search/forward projections with version fencing and tombstones.
+- `pkg/featureindex/commission.go`: catalogue search projection and independent catalogue/statistics forward components.
+- `rpc/sort/discovery/index/forward.go`: bounded Redis batch reads and monotonic component writes shared by projection owners.
+
+Successful discovery requests and Need writes retain the existing runtime/activity
+observation behavior. Need reads and failures do not refresh activity.
+
+`SortService.Discovery` handles contexts, ranking and validation.
+`FeedService.Discovery` owns delivery. Their Thrift envelopes carry strictly
+decoded JSON domain contracts; generated code comes from `idl/sort.thrift` and
+`idl/feed.thrift`. Internal legacy-prefetch operations are not HTTP operations.
+
+Migration 107 added `discovery_contexts` and `processed_items.retrieval_slots`.
+New executions no longer insert into `discovery_contexts`; captured Needs stay
+in `need_inputs` and `current_need_inputs` (migrations 105–106). Historical saved
+context rows are not selected or mutated, and their IDs are not accepted as
+NeedInput IDs. Historical ephemeral rows retain their recorded 30-day expiry;
+an hourly maintenance job removes expired rows in batches with a five-minute
+run budget. This cache change requires no DB migration.
+
+Broadcast and commission ES documents gain `retrieval_slots`; native language and explicit source-owned provider evidence populate known fields. Public Agent projection
+uses its own configured versioned index (default `agent_discovery_v1`) in the
+existing cluster, not a separate search service. Startup verifies its mapping
+and embedding dimensions. Projection reads public Card fields only. Public Card
+updates and the existing maintenance rebuild path update the index; Redis tombstones exclude unavailable Cards even while ES catches up; current
+account and block checks remain database-backed. Automatic people discovery excludes existing
+friends and nonempty PM conversations. Query people search retains those contacts.
+
+Commission provider-region/language evidence is currently unavailable at its
+source boundary and stays unknown. Region constraints therefore reject those
+rows; no location is inferred from the owner. Broadcast/Agent provider region
+also remains unknown without a separately approved public source field.
+
+### Search index and forward index
+
+For Agent and Commission, ES stores only fields used for retrieval/filtering,
+plus IDs and version metadata required to join projections. Agent ES keeps
+public search text/name, active state, slots and embedding; activity/edit times
+are not in ES. Commission ES keeps weighted searchable text, active state,
+seller ID, slots, price/currency/promised duration and embedding. Fulfillment,
+ratings, counts, statistics revision and update time are not in ES. Price and source text serve both retrieval and eligibility checks and are
+stored in both. Candidate embeddings exist only in ES. All three kinds read scalar features through the
+[registered feature module](feature_index.md); existing ES fields are unchanged.
+
+Agent/commission ES responses return candidate IDs, source revisions, `_index`
+and channel scores. Broadcast recall retains only existing text/filter evidence
+for its source fingerprint and channel scores; embeddings and scalar ranking
+fields are not transferred. Hot/new lists return IDs without an ES feature fetch. Sort then batches Redis forward reads for the deduplicated candidates:
+
+| Key | Contents and revision |
+|---|---|
+| `discovery:forward:agent:<concrete-index>:<id>:card` | Public Card projection, language/provider evidence, activity time; Card rebuild fence |
+| `discovery:forward:commission:<concrete-index>:<id>:catalogue` | Catalogue projection, source evidence, budget/duration evidence, update time; catalogue revision |
+| `discovery:forward:commission:<concrete-index>:<id>:statistics` | Completion/rating/count/delivery features; independent statistics revision |
+
+The Agent/commission views above have seven-day physical retention.
+Broadcast uses `discovery:forward:broadcast:v1:<id>:item`, with 48-hour physical
+retention and bounded DB repair on misses. Bundled views use event/periodic
+refresh without age-based logical expiry. Its status/expiry is checked in
+a small authoritative DB batch, even on warm hits. See [feature_index.md](feature_index.md)
+for hot-reloaded YAML field registration, source fencing and periodic loading.
+Namespaces use concrete ES generations so staged backfills cannot change the
+currently served generation. Missing components and revision mismatches skip the
+candidate and increment `discovery_rejected_total` with `forward_missing` or
+`forward_version`; Redis errors and corrupt components fail the request. No
+online DB/RPC fallback fills missing Agent/commission ranking features with defaults. Existing
+account/block/contact checks and current public display names still come from
+bounded DB queries. Exact Agent identity lookup retains its DB-only path because
+it does not rank by activity or semantic features.
+
+Existing Card writers and commission consumers/backfills write the forward
+projection before the ES document. The stores are eventually consistent; there
+is no cross-store transaction. Version guards reject older writes, including
+older tombstones. Commission statistics events update only the statistics
+component, without catalogue RPC, embedding or ES writes. Failed writes retain
+the existing consumer retry behavior. New online commission ranking no longer
+calls catalogue/statistics RPCs per request. Its availability and price snapshot
+follows projection updates; irreversible transaction validation remains with the
+owning service. Samples retain the concrete source index and feature revisions.
+Legacy commission search/exact-ID adapters also read statistics from Redis.
+Before deploying these readers, deploy the projection writers and backfill the
+forward components for their served ES generation. This prerequisite applies
+even when `ENABLE_NEED_SEARCH=false`; changing the route switch does not restore
+the old ES-feature storage contract.
+
+Recall uses lexical/dense channels and existing hot/new/new-UGC Redis
+lists where enabled. Broadcast recommendations also run `swing_i2i` when
+`ENABLE_SWING_I2I_RECALL=true`, using the existing surfaced-item seeds and
+neighbor index. The user seed expansion runs once per request, independently
+of Need IDs; each recommendation context still applies its own filters and rule
+score. Swing similarity orders the recall pool, not lexical or semantic evidence
+for a Need. A Swing-only candidate must pass the normal relevance gate unless
+it belongs to the empty-context baseline. Broadcast recommendation ordering can use the optional discovery LR scorer after rule gates.
+
+When `FRIEND_FEED_ENABLED=true`, friend Broadcast recall runs once as a parallel
+user-level lane. It has its own `input_origin="friend"` execution snapshot and
+no Need ID. It does not inherit a Need's query, language or other constraints;
+explicit request filters, current visibility/block/expiry checks and seen-state
+deduplication still apply. Friend candidates bypass the relevance gate but
+receive ordinary freshness/quality scores and operator policies. The existing
+`FRIEND_FEED_MAX_AUTHORS`, `FRIEND_FEED_WINDOW_HOURS` and `FRIEND_FEED_MAX_ITEMS`
+bounds apply. Explicit search never runs friend or Swing recommendation lanes.
+
+Friend source limits apply once to the user's final merged recommendation,
+across all Needs and the friend lane. Multi-source items count as friend even
+if a Need's lexical/dense candidate wins deduplication. Legacy Feed freezes the
+configured source-limit fractions with its candidate pool and applies them to
+each actual page size after missing details are removed, backfilling from other
+sources. Overflow may serve later pages; a page with zero admissible candidates
+ends pagination. The default `1/2` ceiling permits at most `floor(limit/2)`
+friend items, and never pads a short response. Missing/malformed Swing index
+data or failed friend recall marks only that lane unavailable. Deploy the updated
+Feed before Sort when rolling services separately, so legacy page delivery
+understands the frozen source-limit fractions before friend recall starts.
+Fan-out is bounded to six concurrent channels, 200 merged documents per context,
+100 commission/Agent candidates per kind, and at most five contexts. Forward reads and current account/relationship checks use bounded batches. Rule features, gates, configuration
+hash, request time, contributions and final policy score are frozen in samples.
+
+## Delivery, pagination and samples
+
+Query search has within-response dedup only. It writes broadcast validation state
+to `impr:search:agent:<id>:items`, independently of automatic history. Automatic
+broadcast discovery retains existing item/group/URL impression keys, rolling
+Bloom history and injection claims. Other automatic kinds use typed membership
+in `impr:discovery:agent:<id>:items`.
+
+Requests with an `Idempotency-Key` cache the assembled response for 24 hours,
+scoped by owner plus a hashed key. Matching retries return that response and
+impression without querying Sort or checking mutable Need/source state again;
+changed payloads return 409. Requests without a key do not create a response
+cache. Cache failures remain errors when the caller requested idempotency.
+
+Needs and rules use the execution snapshot. Sort hydrates registered forward projections and checks current source state
+once per context before filtering and scoring; it performs no extra
+post-ranking hydration or `Revalidate` RPC. Later Need/source changes affect new
+requests. Assembled response caches may remain stale for their TTL.
+
+History/claim updates, broadcast consumption events and delivered sample publication run independently in the
+background, each with a two-second timeout detached from request cancellation.
+They do not share a transaction with response/page caches and cannot fail the
+response. Failures emit logs and `discovery_recording_failures_total{stage}`.
+Delivered broadcasts from both search and recommendation publish the existing
+`consumed` event to `stream:item:stats`; Agent/Commission results, prefetched or
+skipped candidates, exhausted pages and cached response retries do not.
+Consumption failures use stage `consumed` in the same recording-failure metric.
+No durable retry/outbox is added: transient history gaps may permit repeated
+recommendations, and missing samples may cause feedback joins to miss. Cached
+response retries do not publish another exposure or repair missing samples.
+
+Legacy Feed keeps `refresh`, `load_more`, `has_more`, the existing item DTO and
+an additive `discovery` metadata object. Its separate
+`discovery:feed:<owner>:page` cache retains at most 200 frozen candidates for 30
+minutes. Each page honors the caller's limit (default 20, maximum 100), with one shared impression ID and
+absolute sample position. Page assembly calls the existing item detail lookup;
+missing/non-completed items are skipped and the next cached candidate is tried.
+Need/context changes do not invalidate a frozen page. Cursor advancement is
+saved before best-effort recording and is independent of its success. Prefetched
+or skipped candidates are not exposures. Old-generation feed caches are not
+read by the new adapter.
+
+Migration 108 extends the same `replay_logs` table and Redis stream:
+
+| Rows | Pipeline | Mode | Schema | Identity |
+|---|---|---|---|---|
+| Existing/legacy | `legacy_feed_v1` | `feed` | 1 | Broadcast `item_id` |
+| New | `need_search_v1` | `search` or `recommendation` | 2 | `source_kind`, `source_id`; `item_id` only for broadcasts |
+
+New rows also have context/Need/revision fields. `agent_features.search_context`
+contains frozen contexts and provenance; `item_features.search` contains the
+candidate, rule evidence and policy result. Recommendation samples carry
+`agent_features.experiments`, mapping each running Agent-bucket experiment to
+the Agent's arm (`treatment` or `control`), for example
+`{"discovery-need-budget-v1": "treatment"}`. The key is the bucket salt without
+its trailing colon. An experiment is running when its basis-point setting is
+positive; settings of 0 omit it, and Search samples omit the field. The arm is
+the intent-to-treat hash assignment, recorded even when a runtime dependency
+such as a model leaves the request on the incumbent path.
+`discovery-rating-lr-v2` is recorded only for `discovery-rating-lr-v1`
+treatment Agents, its population. Frozen pages keep the arms of the execution
+that created them. Compare arms with `agent_features->'experiments'->>'<name>'`;
+a changed salt starts a new experiment. `item_score` is the final policy
+score. The existing unique `(impression_id, position)` key makes consumption
+idempotent. No reject/empty result creates a row or a negative label. Internal
+Feed readers restrict to broadcast Feed/recommendation samples; legacy
+feature-dependent rescue reads restrict to the legacy generation. The legacy
+Feed rescue cron is disabled while `ENABLE_NEED_SEARCH=true`: its domain-based
+measurement cannot interpret new delivery samples. It resumes legacy behavior
+when the routing flag is off.
+
+CLI 0.0.55 adds `search`, `recommend`, and Need capture
+commands via the existing `need input` group. The ar-broadcast Skill is 0.14.29. Broadcast feedback retains existing
+meaning; `feed event record --impression-id` selects the exact cached impression
+when the same item appeared in multiple searches. Nonbroadcast IDs never enter
+broadcast feedback. The CLI fills missing score-feedback impression IDs from
+the latest unexpired cached broadcast exposure, preserving explicit IDs. Pass
+each item's originating `impression_id` when scoring earlier results; cache
+lookup cannot infer which of several exposures caused a judgment. Uncached or
+expired items remain unattributed. See the [attribution audit](../discovery-attribution-audit.md)
+for join contracts, production evidence and the read-only diagnostic query. People results do not trigger messages or friend requests.
+
+## Need Capture integration
+
+Create with `POST /api/v2/need-inputs` or `eigenflux need input create`.
+New captures use `need_input.v2`: an owned confirmed Intent ID/version, kind,
+`target.goal`, optional `target.context`, mandatory `requirements`, optional
+`preferences`, priority and typed constraints. See [the capture contract](api_endpoints.md#intent-linked-needinput-capture).
+
+The CLI accepts query search and automatic recommendations only. Need selection
+is internal; humans provide Intent wording and policy, not Need IDs or forms.
+At the HTTP/RPC boundary, `need_id` / `need_ids` identify `need_input_id`.
+Inline `need` uses v2 validation and checks its owned current Intent without
+saving an input. It creates only an execution snapshot.
+
+`pkg/need.Store.Current` reads ownership and eligibility through
+`current_need_inputs` in one MVCC statement. Foreign/missing IDs return 404;
+inactive or stale Intent-linked inputs return 409. Explicit expired deadlines
+return 409 and automatic selection excludes them. Select at most five matching
+inputs, first representing each available requested kind, then filling the bound
+by within-kind position, priority, creation time and ID. Within each kind, order
+by descending priority, descending creation time, then ascending ID. Database failures do not trigger fallback.
+
+Compilation maps goal/context and explicit constraints, then passes the query
+through the shared query processor before retrieval preparation. Standard
+language/region codes are formatted deterministically without changing source
+JSON. Preferences remain in the snapshot and never become hard filters; this
+rule scorer does not independently score open preferences. Legacy v1 inputs
+remain executable through a mechanical field adapter, preserving their original
+JSON, candidate phrases and preferences without consulting old projections.
+
+Open mandatory requirements remain in the source snapshot and do not block
+retrieval or delivery. Returned candidates are search matches, not proof that
+these prose requirements are satisfied. Only supported structured constraints
+act as hard filters. Legacy unrecognized language/region alternatives still
+report `unresolved_need_constraints` and contribute no candidates, without
+narrowing or dropping the restriction.
+Other Needs remain executable, all Needs may produce an empty successful result,
+and an undeliverable active Need never triggers unrelated profile fallback.
+No Need normalization projection, vocabulary matching or generative interpretation is used.
+Query processing preserves source meaning and does not introduce hard constraints.
+Stored Need embeddings are precomputed asynchronously. A missing vector retains
+lexical retrieval with `embedding_pending`; cache/storage errors report
+`embedding_unavailable`. Explicit queries and unsaved inline Needs still compute
+on demand and retain lexical retrieval on optional embedding failure.
+
+`captured_need` freezes the original input JSON, input ID and Intent ID/version
+inside execution contexts and existing replay samples. Result/sample `need_id`
+means NeedInput ID; `need_revision` means linked Intent version. `context_id`
+identifies the execution. Fresh requests observe input/Intent eligibility;
+cached responses and pages retain their original snapshots.
+
+```sh
+eigenflux search "PostgreSQL performance expert" --types agent
+eigenflux recommend --types agent --limit 10
+```
+
+## Configuration and rollout gates
+
+`ENABLE_NEED_SEARCH=true` requires `ENABLE_COMMISSION_INDEX=true`,
+`ENABLE_COMMISSION_DISCOVERY_API=true`, and `ENABLE_REPLAY_LOG=true`. Preserve the
+existing commission allowlist. Every participating process must share the same
+cutover setting and embedding configuration.
+
+`DISCOVERY_RULES_PATH` defaults to `configs/discovery/rules.json`. Its root has
+`broadcast`, `commission`, `agent`; each has `search` and `recommendation` rules.
+Each rule requires `version`, `bm25_scale`, `cosine_floor`, `min_relevance`,
+`threshold`, and `half_life_ms`. The MVP formulas in `rpc/sort/discovery/score.go` are
+versioned code; gates/scales/half-life are independent per kind/mode. Initial
+formula coefficients must also be reviewed against supplied examples before
+cutover. There are deliberately no invented production threshold assets.
+`AGENT_DISCOVERY_INDEX` selects the public Agent index.
+
+Broadcast language filters use `lang.keyword`, preserving the existing top-level
+`lang` text field and its keyword multi-field. The rollover template declares
+this mapping explicitly. Sort, Pipeline, and broadcast backfill initialize only
+this language mapping and the `retrieval_slots.provider_region` keyword field;
+they do not add, retype, or change the dynamic policy of historical slot-language
+fields. Thus an existing `retrieval_slots.lang` text mapping does not require a
+broadcast reindex. Agent and Commission filters still use keyword
+`retrieval_slots.lang`. Actual required-field mapping conflicts remain fatal,
+and the error includes the target index and Elasticsearch's bounded reason.
+
+Adding a missing region mapping does not populate historical documents. With a
+region constraint, documents without explicit region evidence remain excluded;
+without that constraint they remain eligible. Before cutover, inspect all
+`items-*` mappings and verify that existing documents already have the
+`lang.keyword` multi-field indexed. Installing a previously absent multi-field
+does not retroactively index its values. The supported production layout is
+top-level `lang: text` with `lang.keyword: keyword`; this initialization does not
+convert a differently typed top-level language field.
+
+Rollout order:
+
+1. Apply migrations through 110 to the intended database. Set `PG_DSN` explicitly when using nondefault local ports.
+2. Deploy typed-aware replay consumers and verify all internal/external readers; keep these readers after a routing rollback.
+3. Supply reviewed three-kind/two-mode rule examples/configuration. Keep API traffic on the old path during preparation.
+4. Use new concrete Agent/commission ES generations when removing old mappings. Existing ES mappings cannot delete fields in place; full document rewrites remove obsolete `_source` fields. Align writer/reader generations, backfill Redis as well as ES, and retain both old generations for rollback. Commission writers target `COMMISSION_INDEX_NAME`; alias promotion follows a successful staged backfill.
+5. Populate both forward and search projections with `scripts/discovery_backfill --kind broadcast|agent` and the existing `scripts/commission_backfill`. These are index maintenance tools, not a new offline ranking pipeline.
+6. Verify strict-filter coverage, source permissions, embedding compatibility, rule examples, and measured load targets. Enable the cutover switch consistently and use existing deployment/PR procedures.
+
+Rollback routes with `ENABLE_NEED_SEARCH=false`; retain additive schema and typed
+readers. Migration 108 refuses downgrade while nonbroadcast rows remain. Do not
+coerce typed IDs into `item_id` or discard samples to make a downgrade succeed.
+
+Metrics expose execution latency/status, hard-filter/threshold/seen rejects,
+optional channel failures and explicit fallback reasons. Their
+labels contain bounded codes, never owner IDs or query text. Accepted latency
+targets require a separately agreed corpus/concurrency test; unit/integration
+results are not production latency evidence. Agent-context fallback performs no online model calls. Explicit query cold
+latency still includes on-demand embedding and must be measured separately.
+
+
+### Intent capture maintenance
+
+Completed Agents run a bounded maintenance pass after normal heartbeat business
+stages and after a confirmed Intent add/update. `need capture pending --limit 2`
+reads current active Intent versions without a row in `need_capture_reviews`;
+this includes historical Intents and partially captured versions. It returns
+existing Need IDs/types so the Agent reuses them. `need capture complete --file`
+submits up to one missing input per type with the exact Intent version. The
+server persists all new inputs and the completed review in one transaction.
+Identical retries replay; competing different reviews conflict without duplicating
+inputs. A technical failure leaves the version pending. `no_need` requires a
+reason and no existing/new inputs, and avoids repeated work for that version.
+Intent edits become pending automatically; inactive Intents are excluded.
+
+The user-side Agent performs interpretation according to
+[the maintenance Skill](../../skills/ar-broadcast/references/needs.md#automatic-maintenance).
+The server does not generate inputs or infer needs from Card interests. No form
+is exposed in search/recommendation CLI parameters. Review status is shared across
+Homes; heartbeat scheduling stays with the host and stage routing stays in CLI.
+A baseline Feed does not skip maintenance when the current heartbeat plan
+confirms completed onboarding and includes `need_capture`; incomplete onboarding
+remains read-only. At most two versions are reviewed per cycle; the Skill stops starting reviews
+past 60 seconds and continues other safe stages after a recoverable error.
+
+Apply migration 000109 before deploying these API routes. Publish CLI 0.0.56
+before the updated Skills bundle; its minimum CLI version is 0.0.56. Existing
+clients retain their compatible bundle. Serving continues through per-kind
+fallback while active Agents gradually finish capture. Dormant Agents do not
+produce new inputs until they run again. This change does not switch missing-Need
+broadcast traffic back to the legacy ranker.
+
+### Asynchronous Need embeddings
+
+Saving or completing capture does not call an embedding model. With
+`ENABLE_NEED_SEARCH=true`, Pipeline runs two `NeedEmbeddingWorker` loops. They
+poll current nonexpired NeedInputs every five seconds when idle, deriving work
+from the durable input rows rather than a best-effort notification. Existing
+inputs and new model/query-processing generations are discovered automatically.
+No separate capture-time Redis publication or normalized Need projection exists.
+
+The worker and online compiler use `queryprocessing.NeedText(goal, context)` and
+the same query processor. Only the normalized original text is embedded;
+requirements, preferences and filters are not appended.
+Redis keys combine a hash of that processed text with a generation hash covering
+provider, resolved model, explicit `DISCOVERY_EMBEDDING_REVISION`, endpoint,
+dimensions and `queryprocessing.Version`. Keys contain no raw Need text.
+Identical text shares a vector across input IDs/types. Model endpoint or version
+changes cannot read an old generation. Sort execution snapshots record this
+opaque generation as `embedding_version`. Query-processing changes must bump its `Version` constant.
+
+Migration 000110 adds `need_embedding_jobs`, keyed by input ID and generation.
+Claims use a 60-second lease and unique token; an expired worker cannot finalize
+a newer claim. Each computation has a 45-second deadline. Errors retry after
+5 seconds with exponential backoff capped at five minutes. Concurrent identical
+text production is bounded by a Redis lease. Successful vectors live for 30 days;
+active sources recheck cache readiness daily. Cache eviction triggers online
+repair scheduling without resetting failure backoff or stealing active leases.
+The input lifecycle remains authoritative: inactive, stale-version and expired
+Needs are not claimed. A late completion can populate only its immutable text
+and generation key, never mutate a Need or become a different generation's vector.
+
+Online stored-Need execution reads the cached vector and does not invoke the
+model on a miss. It requests background work and continues available retrieval
+under unchanged hard filters. Dense recall and semantic scoring resume on a
+fresh execution after the vector is ready. Existing frozen search pages and
+idempotent responses retain their original results. Explicit query and inline Need paths retain on-demand embedding. Agent-context fallback skips embedding entirely.
+
+Apply 000110 before deployment, then start the updated Pipeline and Sort with
+identical embedding settings. Bump `DISCOVERY_EMBEDDING_REVISION` when changing
+weights behind a stable model name/endpoint. Candidate embeddings
+must still use a compatible embedding space; query-cache invalidation does not
+rebuild those indexes. Missing or stopped workers leave cache misses lexical-only
+until workers resume. `discovery_need_embedding_total{operation,outcome}` reports
+lookup hit/pending/error and production reused/generated/busy/error, without
+high-cardinality or private-text labels.
+
+Code: `rpc/sort/discovery/needembedding/` owns cache identity, vector validation
+and job claims; `pipeline/consumer/need_embedding_worker.go` owns asynchronous
+execution; `rpc/sort/discovery/compiler.go` owns online lookup; Pipeline/Sort
+wiring constructs the same cache profile.
+
+### Candidate vector storage and ranking
+
+Agent and Commission embeddings exist only in their ES search documents. Redis
+All forward components omit vectors and long text (including search text,
+summary, titles and descriptions). Scalar features, language/provider evidence
+and versions remain; broadcasts store a fixed content hash. Exclusions reuse
+version-matched recall text, then discard it before scoring. Commission previews
+reuse recalled titles; Agent previews use current identity. ID-only broadcast
+pools batch-load DB summaries and read full text only for exclusions. See the
+[feature index contract](feature_index.md#read-path).
+Need query vectors still use their separate versioned Redis cache.
+
+Dense recall carries ES `_score` through per-context merging and version-checked
+hydration. With the cosine mappings, `cosine = 2 * dense_score - 1`; a lexical
+`_score` is never interpreted as cosine. Agent/Commission lexical-only candidates
+have missing semantic evidence rather than triggering a vector read or model
+call. Broadcast uses the same dense-score evidence; no candidate vector is loaded
+after recall. Broadcast rule versions carry `:broadcast_dense_v1` to distinguish
+this evidence change. Lexical/pool-only broadcasts no longer receive locally
+computed cosine unless also present in the dense channel. The opt-in [semantic experiment](#semantic-recommendation-experiment)
+reads profile cosine for every broadcast candidate in ES instead.
+
+`lexical = bm25 / (bm25 + bm25_scale)` and
+`semantic = clamp((cosine - cosine_floor) / (1 - cosine_floor))`.
+When semantic evidence exists, relevance is `0.55*lexical + 0.45*semantic`;
+otherwise it is lexical alone. No slot score participates. Other per-kind
+freshness/quality/fulfillment/budget coefficients and hard relevance gates remain.
+Review thresholds for this feature contract and use new rule versions on rollout.
+
+After upgrading all forward readers and writers, remove old Redis payload fields without
+regenerating embeddings:
+
+```bash
+go run ./scripts/discovery_forward_cleanup          # preview count
+go run ./scripts/discovery_forward_cleanup --apply  # compare-and-set updates
+```
+
+This ten-minute scan covers broadcast item, Agent card and Commission catalogue
+components. It removes retired text/vector fields, derives broadcast content
+hashes, preserves int64 IDs, expiry and version fences, and skips concurrent
+changes. Rerun if interrupted. Statistics, Need vector caches and historical
+samples are untouched. Fresh projections already omit retired fields. Existing
+ES mappings require a new concrete index generation to physically remove old
+properties; existing unused fields are never queried. Historical migrations and
+captured legacy input records remain historical data, not runtime dependencies.
+
+### Broadcast recall metrics
+
+With `ENABLE_NEED_SEARCH=true`, broadcast recommendations continue to update
+`recall_feed_total{source}` and `recall_impression_total{source}` used by the
+Recall Sources dashboard. Discovery maps `lexical` to `keyword` and `dense` to
+`knn`; `hot_recall`, `new_recall`, and `new_ugc_recall` retain their labels.
+`friend` and `swing_i2i` retain their existing labels and contribute only when
+their channels actually recall or deliver broadcasts.
+
+Candidate counts cover hydrated, version-valid broadcasts before seen checks,
+hard filters, relevance thresholds and ranking. Each item/source pair counts
+once per execution even when multiple Need contexts recall it. Impression
+counts cover only delivered recommendation pages after detail preparation;
+prefetched rows, missing details, idempotent retries and exhausted pages do not
+count. Explicit search and Agent/Commission results do not enter these broadcast
+feed metrics. Candidate counters are exported by Sort; delivery counters are
+exported by Feed. Dashboard queries must aggregate both service jobs. Delivery counts do not depend on asynchronous history/sample
+writes succeeding. The metrics retain their names across the cutover, but the
+retrieval and filtering algorithms differ from the legacy pipeline.
+
+
+## Broadcast discovery LR
+
+`DISCOVERY_LR_ENABLED` defaults to `false`. When enabled, Sort loads
+`DISCOVERY_LR_MODEL_PATH` (default `/data/models/eigenflux/discovery-lr/current/model.json`)
+and polls every `DISCOVERY_LR_RELOAD_INTERVAL` (default `60s`). This model is
+independent of the legacy `LR_RANKER_*` model and accepts only the
+`discovery_lr_v1` contract. Invalid/missing initial models keep rule ordering;
+failed reloads retain the last valid model. A request pins one immutable model
+for its whole broadcast batch. Reload and scoring outcomes are exported as
+`discovery_lr_reload_total` and `discovery_lr_scoring_total`.
+
+The model orders eligible broadcast recommendations inside each context. Explicit
+search, Agent and commission candidates keep their rule scorers. Hard filters,
+rule relevance/score thresholds, Need/context priority, source ceilings,
+injection policies, and deduplication remain authoritative. Existing broadcast
+policies receive the LR probability as their initial score. The model predicts
+the existing exact-impression follow-up label; it is not an Agent or commission
+engagement model.
+
+The nine ordered inputs are `lexical`, `semantic`, `freshness`, `quality`,
+`relevance`, `rule_score`, `semantic_missing`, `origin_baseline`, `origin_friend`.
+The first six are bounded rule evidence; the last three are binary flags.
+Recall channels are excluded because merge changes their attribution after
+scoring. Frozen `Candidate.Score` retains the complete rule evidence; additive
+`Candidate.LR` records model version, contract and probability. `FinalScore`
+records the subsequent policy result. These fields survive Feed delivery and
+are written under `replay_logs.item_features.search`. No learned probability
+or policy score is fed back into model inputs.
+
+The ML trainer produces a JSON logistic model, chronological holdout report,
+and SHA-256 checksums under `rec/model/discovery_lr/sample_date=.../lr_.../`.
+Sort validates the feature order, finite coefficients, successful promotion,
+and Python-generated probability self-tests before making a model visible.
+The matching fixture in `eigenflux-ml/tests/fixtures/discovery_lr_v1.json` and
+`rpc/sort/discoverylr/testdata/discovery_lr_v1.json` checks both feature and
+probability parity. `TestDiscoveryLRRecommendation` exercises real HTTP/RPC
+serving and delivered replay snapshots with the model enabled.
+
+### Deployment and backfill
+
+Deploy reviewed, merged versions of the server, `eigenflux-rec-offline` and
+`eigenflux-ml` together. Keep the new scorer disabled during preparation.
+
+1. Run the offline `discovery-lr-training-etl` task for each complete new-pipeline
+   day (initial backfill: 2026-10-02 and 2026-10-03). It uses a separate
+   `rec/dataset/discovery_lr` prefix; never relabel legacy partitions.
+2. Run `scripts/discovery_lr_daily.py --run-date 2026-10-04` in the ML checkout.
+   Review dataset quality, source partition hashes, holdout AUC/NDCG and the
+   resulting bundle. A failed quality/evaluation gate must not be bypassed.
+3. Install `ossutil` and the existing ECS RAM role profile at
+   `/etc/eigenflux-lr-model/.ossutilconfig`; ensure `ecs-user` can read it.
+   Create `/data/models/eigenflux/discovery-lr` owned by `ecs-user:ecs-user`,
+   mode `0750`, so both the installer and Sort service can access the model.
+   Install `cloud/systemd/eigenflux-discovery-lr-model-pull.service`, then run it
+   to install the evaluated bundle with checksum verification and atomic links.
+4. Enable `DISCOVERY_LR_ENABLED=true` in the reviewed runtime configuration,
+   deploy via the production-managed deployment service, and verify the loaded
+   version, scoring counters, and new delivered `search.lr` records.
+5. Enable the new 06:15 ETL schedule and the ML 07:00 training timer. Disable the
+   legacy ETL/train/pull schedules once all traffic uses discovery. Successful
+   training triggers the new model-pull unit via `OnSuccess`; there is no fixed
+   pull time that can race training completion. Failed runs keep serving the
+   last valid model.
+
+For model rollback, run `MODEL_ROOT=/data/models/eigenflux/discovery-lr
+scripts/cloud/install_lr_model.sh --rollback` as the installer user (on one
+shell line). Disabling `DISCOVERY_LR_ENABLED` and restarting Sort restores rule
+ordering. Keep the legacy model directory intact for a pipeline rollback.
+
+### Need recall depth experiment
+
+`DISCOVERY_NEED_RECALL_BPS` defaults to `0`, accepts 0–10000, and selects stable
+Agent buckets using `discovery-need-recall-v1`, independently of Need budget.
+Search never enables this treatment. Restart Sort after changing the value.
+
+For each captured broadcast Need with a vector, treatment adds a dense lane
+with k=40 and `created_at >= execution time - 7 days`, alongside the main k=80
+lane. Both use the shared consumed-group exclusion described in the Need budget
+section below. One history attempt serves all Needs and both lanes; failed or
+timed-out reads leave recall unfiltered by consumption. Successful bounded
+history remains useful even when truncated. Lexical and downstream seen checks retain their existing behavior.
+
+The affected context's candidate cap rises from 200 to 240. When Need budget is
+also enabled its 300 cap takes precedence; the caps do not add. Other contexts
+keep their existing cap. The global snapshot stays at 200. Both lanes retain the
+`dense` channel, LR features and source ceilings; duplicate candidates keep the
+higher dense score under the existing version checks. Equal channels are merged
+in deterministic lane-key order, including the two existing Profile lanes.
+
+`discovery_need_dense_duration_seconds{lane="main|fresh",exclusion="on|off"}`
+records individual Need dense recall calls, including failures, after history
+loading. Exclusion is `on` only when nonempty group terms were applied. Main
+control calls are also measured. Sample experiment arms are recorded in
+`replay_logs.agent_features.experiments` while the experiment is configured;
+content age uses `fresh_at`, without adding lane provenance to ranking samples.
+
+Offline recall keys append `:since=<milliseconds>` for positive cutoffs, keeping
+unbounded legacy keys unchanged and separating the new lane. Old snapshots lack
+fresh-lane evidence and require recapture for treatment replay. Before activation,
+compare 3/7/14-day windows with read-only production kNN, confirm baseline A/A,
+and measure 20 sequential calls including near-8,192-group history (p95 <=100 ms).
+The deterministic Profile tie-break can resolve previously unstable baseline
+outputs and must be checked separately in A/A.
+
+Roll out with Need budget at 0 and Need recall at 1000 only after offline gates
+pass and runtime activation is approved. Observe latency for 24 hours before
+5000; the 14-day analysis window starts at that ramp. Rollback sets Need recall
+to 0 and restarts Sort; frozen pages retain their content for up to 30 minutes.
+
+### Need candidate budget and attribution experiment
+
+`DISCOVERY_NEED_BUDGET_BPS=0` preserves the existing recommendation behavior
+(default). Values 1–10000 select a stable Agent-ID bucket independently of the
+consumed-refill, semantic and rating experiments. Sort rejects values outside
+that range. Search never uses this experiment.
+
+Selected recommendations merge up to 300 unique candidates per context and up
+to 300 broadcasts (other kinds retain their 100-candidate limit), instead of
+200. Need dense k remains 80 and the global Feed snapshot remains 200.
+
+When either the Need budget or Need recall experiment is enabled, before
+captured-Need broadcast dense retrieval, one request-local history read
+supplies every Need with at most 8,192 verified consumed groups. The same
+`ConsumedGroups` authority used by refill checks rolling delivery history.
+The kNN filter excludes these groups before top-k selection. Failed or timed-out
+history reads use no exclusion; all Needs share the same 300 ms attempt, without
+retries. Lexical recall, profile recall and downstream authoritative seen checks
+retain their existing behavior. A truncated history is still useful but does
+not exclude every consumed group.
+
+Before global recommendation ordering, each broadcast chooses one eligible
+context copy: an injected copy first, then a copy recalled by that context's
+lexical/dense channel, then the highest available current-Need cosine, then the
+existing ordering for ties or missing evidence. Evidence is read before channels
+are combined across contexts. Only the winning copy enters global ordering;
+its LR score, boosts and provenance stay intact. The merged channel attribution
+still includes losing copies so source ceilings cannot be bypassed.
+
+After attribution, the `need_mix` policy in `configs/sort/rerank.yaml`
+(`reserved_fraction: 3/4`, `min_need_cosine: 0.4`) mixes each tier of
+equal-priority captured Needs as a soft quota with equal Need weights. Positions
+are filled in order; a position is reserved while
+`reserved × denominator < (filled + 1) × numerator`, so 3/4 yields the pattern
+reserved, reserved, reserved, global. A reserved position rotates across Needs
+and takes that Need's next candidate in its local LR/policy order, considering
+only injected copies and copies whose current-Need cosine is at least
+`min_need_cosine`; a copy without current-Need cosine never qualifies. A global
+position, or a reserved position no Need can fill, takes the tier's best
+remaining candidate in the existing global order, so pooled, below-floor and
+strong cross-Need candidates still compete there. Duplicate items/groups and
+ineligible copies do not consume a position.
+
+Higher explicit priorities remain ahead of lower ones, and captured Needs remain
+ahead of Profile/friend fallback contexts. Within a tier, Need turn order uses
+context update time descending, then context ID ascending. No LR probability,
+boost or feature is rewritten. Without `need_mix`, the bucket keeps global
+ordering after attribution; `reserved_fraction: 1/1` with
+`min_need_cosine: -1` is plain round robin by local rank. The shared snapshot
+still stops at 200 candidates. Per-page source ceilings run after mixing and can
+skip candidates, so the split is not a fixed per-Need page count. Search and
+recommendations outside the bucket retain their existing global ordering.
+
+The global configuration is independent: `SWING_I2I_RECALL_K=80` limits Swing
+recall (the code fallback remains 100), and `configs/sort/rerank.yaml` limits
+`swing_i2i` to 1/4 of each recommendation page, at most five on a 20-item page.
+These settings affect every Agent, including the control bucket. Roll them back
+separately from the Need experiment. Existing frozen pages keep their contents
+until expiry; restart Sort to apply changed environment settings.
+
+`discovery_hydrate_duration_seconds{mode}` measures each Source hydration call,
+including failures, with a 300 ms bucket. It does not introduce a new timeout:
+Hydrate remains a required authority read governed by the caller's deadline.
+The rating evidence stage retains its existing 300 ms budget. Compare treatment
+and control by selected Need count using the recorded bucket activation time,
+not the merge or deployment time; model, cosine gates and UGC boosts are unchanged.
+
+### Bounded consumed-candidate refill
+
+`DISCOVERY_CONSUMED_REFILL_BPS=0` disables refill (default). Values 1–10000
+select a stable, nested hash bucket of Agent IDs; 10000 selects all Agents.
+Restart Sort to apply a changed value. Search is unaffected. Existing frozen
+Feed pages and idempotent responses retain their snapshot until refresh/expiry
+(up to 30 minutes for legacy page state).
+
+For an enabled recommendation whose current page is empty after source limits,
+Sort makes at most one extra
+lexical recall per verified broadcast Need/Profile context (80 rows each, at
+most 10 contexts, six concurrent requests). It excludes the original lexical
+IDs and confirmed consumed groups before the ES cutoff. Candidate validation,
+source-version checks, rolling consumption checks, relevance/score thresholds,
+LR ranking, rerank policies, Need precedence and source limits remain in force.
+No recency window or date sort is introduced. A nonempty page (including a partial
+page) retains the original candidates and does not read consumption history or
+run extra searches. An underfilled 200-candidate prefetch snapshot alone never
+triggers refill. This intentionally prioritizes preserving existing deliveries
+over filling every request to its requested size.
+
+Consumption-history enumeration is atomically capped at 65,536 personal-set
+members. At most 8,192 numerically newest groups are verified against the same
+30 daily buckets used by delivery dedup. The refreshed personal-set TTL alone
+never authorizes an exclusion. Groups rejected as consumed in the current
+request take priority within the exclusion budget. Redis 7 `EVAL_RO` scripts
+perform reads only; membership verification sends each group once and removes
+matches progressively in blocks of 512. History, recall and validation share a 750 ms context budget; final ranking
+retains the parent deadline. The wave adds no retry loop or consumption writes.
+Existing client retries remain subject to the deadline. It is bounded recovery,
+not exhaustive retrieval.
+
+A still-short result after a full 80-hit refill page reports `scan_budget`;
+it does not claim that eligible inventory is exhausted.
+Truncation and optional history, recall or validation failures appear in
+`partial_reasons` and `discovery_consumed_refill_total{outcome=...}`. Failed
+additional candidates cannot bypass authority checks; existing validated
+candidates remain available. Parent cancellation still fails the request.
+`discovery_rejected_total{reason="source_version"}` separately records stale
+recall/forward mismatches. Fixing those projections is outside this switch.
+
+### Semantic recommendation experiment
+
+`DISCOVERY_PROFILE_SEMANTIC_BPS=0` disables the experiment (default). Values
+1–10000 select a stable hash bucket of Agent IDs, independent of the refill
+bucket; 10000 selects all Agents. Restart Sort to apply a changed value. Search
+is unaffected. Analyse the experiment by bucket assignment (intent to treat):
+selected Agents without a profile vector run the ordinary path for Profile
+contexts. While the value is positive, control-bucket recommendations also
+record `profile_cosine` as a shadow score feature for Profile and friend
+candidates, without changing eligibility, ordering, partial reasons or LR
+scoring.
+
+The experiment optimises for positive ratings. Similarity only adds and orders
+candidates: a candidate the rule score accepts stays eligible.
+
+For a selected broadcast recommendation, Sort:
+
+- reads the Agent's stored profile embedding (`agent_profiles.profile_embedding`,
+  through the `cache:profile:emb:{agent_id}` Redis cache) and runs two shared
+  profile-vector dense recalls for Profile contexts: an unrestricted lane
+  (80 rows) and a recent lane limited to content created in the last 30 days
+  (40 rows). Both exclude verified consumed groups (history read bounded to
+  300 ms; on timeout recall runs without the exclusion);
+- reads cosine similarity for every broadcast candidate with one ES
+  `script_score` query per vector, all vectors in parallel under one 300 ms
+  budget (collapsed by item ID, without transferring candidate vectors). Refill
+  candidates are read on demand. A timeout stops further similarity reads in
+  the request. Profile and friend contexts use the profile
+  vector; a captured Need context with a ready Need vector uses that Need
+  vector. Captured Needs whose vector is pending, and baseline contexts, keep
+  their ordinary score and LR ordering;
+- makes a candidate eligible when the rule score accepts it or its cosine
+  reaches the age-tiered floor: ≥ 0.30 for content up to 30 days old, ≥ 0.40 up
+  to 90 days and ≥ 0.50 otherwise (vector-only recall otherwise needs cosine
+  near 0.7 to pass the rule gate). Friend candidates keep their relevance
+  bypass;
+- assigns a `semantic_tier`: at the floor (rank `2 + cosine + 0.05 *
+  freshness`), rule-eligible below the floor (rank between 1 and 2), and
+  rule-eligible without an item embedding (rank = rule value, 0–1, with a
+  `*_embedding_missing` feature). The rank replaces the discovery LR
+  probability for these candidates and feeds the rerank policies;
+- merges scored candidates across contexts of equal priority by tier, then by
+  policy-adjusted score, so one Profile clause or Need cannot fill the page with
+  weak candidates ahead of another's strong ones. Captured Needs still precede
+  Profile contexts, and the policy order still applies within a context.
+
+The rule `score` keeps its value, relevance and contributions so replay samples
+retain the discovery LR feature contract. Scored samples carry a
+`:profile_semantic_v2` or `:need_semantic_v1` scorer-version suffix,
+`profile_cosine`/`need_cosine` and the matching `*_min_cosine` features (or
+`*_embedding_missing`), `semantic_rank` and `semantic_tier`. Need precedence, rerank policies and source limits remain in
+force.
+
+A missing or zero profile vector, a vector read error or a similarity read
+error keeps ordinary scoring for the affected contexts and reports a
+`profile_semantic:*` or `need_semantic:*` partial reason; a failed similarity
+read is not retried within the request. On rated recommendations, cosine
+separated positive from `-1` ratings far better than rule relevance: profile
+cosine within-Agent AUC 0.77 (0.68 on a holdout) versus 0.49, and Need cosine
+0.85 versus 0.66 on 2026-10-08/15 Need deliveries.
+
+### Positive-rating ranker experiment
+
+`DISCOVERY_RATING_LR_BPS=0` disables the experiment (default). Values 1–10000
+select a stable hash bucket of Agent IDs, independent of the refill and semantic
+buckets; 10000 selects all Agents. Restart Sort to apply a changed value. Sort
+then loads `DISCOVERY_RATING_LR_MODEL_PATH` (default
+`/data/models/eigenflux/discovery-rating-lr/current/model.json`) every
+`DISCOVERY_LR_RELOAD_INTERVAL`. Loading applies the same size, promotion,
+coefficient and self-test checks as the follow-up model and accepts only the
+`discovery_rating_lr_v1` contract. Reload and scoring outcomes are counted in
+`discovery_lr_reload_total` and `discovery_lr_scoring_total` with a `rating_`
+result prefix.
+
+The model predicts a positive rating (score ≥ 1 among rated broadcast
+recommendation deliveries). It scores broadcast-only recommendations (the Feed
+request) of selected Agents. Every eligible candidate is scored, including
+similarity-ranked candidates of the semantic experiment, and the follow-up
+model is not applied to that request. Search, multi-kind recommendations and
+unselected Agents are unchanged.
+
+For each selected request, Sort reads in parallel, under one 300 ms budget and
+without retries (a refill reads only its new candidates and authors, under its
+own budget):
+
+- cosine similarity between every candidate and the stored profile embedding,
+  and between every candidate and each distinct ready captured broadcast Need
+  vector (at most 16), one ES `script_score` query per vector in parallel;
+- each author's PGC classification, using the same cached email-suffix verdicts
+  as the UGC boost. A failed classification read is an error, never UGC.
+
+Any failed read, exceeded budget, out-of-range input or missing model keeps the
+existing ordering (semantic rank, follow-up LR or rule score) for the whole
+request; a request never
+mixes scorers, and the fallback is not a partial result. Rerank policies
+receive the probability as their initial score. Captured Needs still precede
+Profile contexts and context priority still applies. Within equal priority,
+candidates compete across contexts by policy-adjusted probability; an injected
+candidate takes its context's best score so it keeps the front of its context.
+Hard filters, eligibility, deduplication and source ceilings are unchanged.
+
+The 40 ordered inputs, all in [0, 1]:
+
+| Inputs | Definition |
+|---|---|
+| `f_lexical`, `f_semantic`, `f_fresh`, `f_quality`, `relevance`, `value`, `sem_missing`, `o_baseline`, `o_friend` | The nine `discovery_lr_v1` inputs |
+| `o_need`, `o_profile` | Context origin is `need_input` / `agent_context` |
+| `ct_info`, `ct_demand`, `ct_supply`, `ct_alert` | Document content type |
+| `is_pgc`, `known_contact` | Author is a PGC publisher; document `known_contact` |
+| `ch_dense`, `ch_friend`, `ch_hot_recall`, `ch_lexical`, `ch_lexical_recent`, `ch_new_recall`, `ch_new_ugc_recall`, `ch_swing_i2i` | The item's recall channels across the request's candidates, as recorded at delivery |
+| `src_curated`, `src_original`, `src_forwarded` | Document source type |
+| `ttl01` | `clip((expires_at − request_time) / 30 days)`; 0 without an expiry |
+| `need_cos_ctx0` | Cosine to this context's own Need vector; 0 for other contexts |
+| `need_cos_max0`, `prof_cos0`, `cos_best0` | Highest cosine over the Agent's Need vectors, profile cosine, and their maximum; negative values and missing evidence are 0 |
+| `has_need`, `has_prof` | The item has a Need / profile cosine (an item without an embedding has neither) |
+| `need_cos_max_h35`, `need_cos_max_h45`, `prof_cos_h35`, `prof_cos_h45` | `max(cos − 0.35, 0)` and `max(cos − 0.45, 0)` |
+| `n_needs01` | `min(Need vectors with a cosine for the item / 10, 1)` |
+
+`Candidate.LR` records the model version, contract and probability, and
+`Candidate.rating_features` records the exact input vector in contract order.
+Both are written under `replay_logs.item_features.search`. Public results report
+`score_kind` `positive_rating_probability`. The frozen rule `score` keeps the
+`discovery_lr_v1` contract, so the daily follow-up training is unaffected.
+
+`rpc/sort/discoverylr/testdata/discovery_rating_lr_v1.json` holds an offline
+bundle and rated deliveries whose raw serving fields, similarity evidence,
+inputs and probabilities were computed by the offline training code;
+`TestRatingVectorMatchesPythonFixture` checks both input and probability parity.
+`TestDiscoveryRatingRecommendation` exercises real HTTP/RPC serving, ES
+similarity, PGC classification and delivered replay samples.
+
+The daily trainer does not produce this contract. Install a reviewed offline
+bundle in the model directory with an atomic `current` link. Setting
+`DISCOVERY_RATING_LR_BPS=0` and restarting Sort restores the existing ordering.
+
+#### Item rating-count challenger
+
+`DISCOVERY_RATING_LR_V2_BPS=0` disables the challenger (default). Values 1–10000
+select a stable hash bucket of Agent IDs, independent of the other buckets.
+The challenger serves only Agents that the rating ranker already selects
+(`DISCOVERY_RATING_LR_BPS`). Sort loads `DISCOVERY_RATING_LR_V2_MODEL_PATH`
+(default `/data/models/eigenflux/discovery-rating-lr-v2/current/model.json`),
+which must use the `discovery_rating_lr_v2` contract, with the same reload
+interval and validation as the incumbent. Restart Sort to apply a changed value.
+
+The challenger appends three inputs to the 40 `discovery_rating_lr_v1` inputs.
+They come from the item's rating counts from all Agents in `item_stats`, which
+the item statistics consumer updates from rating events:
+
+| Input | Definition |
+|---|---|
+| `it_n01` | `min(log(1 + n) / log(101), 1)`, where `n` counts -1, 0, 1 and 2 ratings |
+| `it_pos_rate` | `(ratings ≥ 1 + 1) / (n + 3)` |
+| `it_neg_rate` | `(-1 ratings + 1) / (n + 3)` |
+
+An item without a row has `n = 0`. Sort reads the counts for every eligible
+candidate with one primary-key query after the similarity and author reads,
+under its own 300 ms budget. A refill reads only new items. A failed or invalid
+read, or a missing challenger model, scores the whole request with the
+incumbent model and is counted as
+`discovery_lr_scoring_total{result="rating_v2_stats_unavailable"}`,
+`rating_v2_invalid_stats` or `rating_v2_unavailable`. Challenger scores are counted as
+`rating_v2_scored`, and reload outcomes as `discovery_lr_reload_total` with
+the `rating_v2_` prefix. `Candidate.LR` records the challenger contract, and
+`rating_features` holds all 43 inputs. Ordering, policies and public
+attribution are the same as for the incumbent.
+
+`rpc/sort/discoverylr/testdata/discovery_rating_lr_v2.json` holds the offline
+bundle and rated deliveries with their counts. `TestRatingV2VectorMatchesPythonFixture`
+checks input and probability parity, and `TestDiscoveryRatingV2Recommendation`
+covers real `item_stats` reads through HTTP/RPC serving and replay samples.

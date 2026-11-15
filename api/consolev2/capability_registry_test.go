@@ -1,0 +1,265 @@
+package consolev2
+
+import (
+	"context"
+	"net/http"
+	"strings"
+	"testing"
+
+	"github.com/cloudwego/hertz/pkg/app"
+
+	"eigenflux_server/pkg/agentcard"
+)
+
+func TestAgentCapabilityRegistryIsBilingualAndStable(t *testing.T) {
+	registry := buildAgentCapabilityRegistry("en", true, true)
+	operations, ok := registry["operations"].([]capabilityOperation)
+	if !ok || len(operations) < 50 {
+		t.Fatalf("operations = %T/%d, want a populated registry", registry["operations"], len(operations))
+	}
+	seen := make(map[string]bool, len(operations))
+	byID := make(map[string]capabilityOperation, len(operations))
+	for _, operation := range operations {
+		if operation.OperationID == "" || operation.CLI == "" || seen[operation.OperationID] {
+			t.Fatalf("invalid or duplicate operation: %#v", operation)
+		}
+		seen[operation.OperationID] = true
+		byID[operation.OperationID] = operation
+		switch operation.OperationID {
+		case "cli.update", "heartbeat.maintenance_status", "heartbeat.plugin_check":
+			if operation.MinCLIVersion != "0.7.2" {
+				t.Fatalf("%s requires CLI 0.7.2, got %q", operation.OperationID, operation.MinCLIVersion)
+			}
+		}
+		for _, language := range []string{"zh-CN", "en"} {
+			text := operation.Localized[language]
+			if text.Label == "" || text.Description == "" {
+				t.Fatalf("operation %q has incomplete %s text", operation.OperationID, language)
+			}
+		}
+	}
+	for _, required := range []string{
+		"need.input.create", "need.input.get", "need.input.list",
+		"identity.switch_account", "identity.recover_account", "profile.update", "context.goal.update", "context.intent.update",
+		"context.security.update", "attention.respond", "message.send", "relation.request", "settings.language.update",
+		"commission.search", "order.create", "order.payment", "wallet.withdrawal.create",
+		"wallet.kyc.read", "wallet.kyc.start", "wallet.kyc.complete",
+		"wallet.kyc.authorize",
+		"cli.update", "heartbeat.maintenance_status", "heartbeat.plugin_check",
+		"watch.run", "heartbeat.migrate.plan", "heartbeat.migrate.verify", "heartbeat.maintenance_report",
+	} {
+		if !seen[required] {
+			t.Fatalf("registry missing %q", required)
+		}
+	}
+	commission := byID["commission.create"]
+	authorize := byID["wallet.kyc.authorize"]
+	if authorize.MinCLIVersion != "0.0.107" || authorize.IdentityRoute != "current_identity" || authorize.Confirmation != "explicit_user_instruction" || authorize.Risk != "elevated" {
+		t.Fatalf("KYC browser handoff contract = %#v", authorize)
+	}
+	payment := byID["order.payment"]
+	if payment.CLI != "eigenflux order payment" || payment.MinCLIVersion != "0.0.103" || payment.RequiresConsoleHandoff || payment.Confirmation != "explicit_user_instruction" {
+		t.Fatalf("order.payment contract = %#v", payment)
+	}
+	if commission.Localized["zh-CN"].Label != "创建任务委托草稿" || commission.Localized["en"].Label != "Create a Commission draft" {
+		t.Fatalf("commission.create terminology = %#v", commission.Localized)
+	}
+	for _, id := range []string{"wallet.kyc.read", "wallet.kyc.start", "wallet.kyc.complete"} {
+		operation := byID[id]
+		if operation.MinCLIVersion != "0.0.106" || operation.IdentityRoute != "current_identity" || operation.RequiresConsoleHandoff {
+			t.Fatalf("%s KYC contract = %#v", id, operation)
+		}
+		if id != "wallet.kyc.read" && (operation.Risk != "elevated" || operation.Confirmation != "explicit_user_instruction") {
+			t.Fatalf("%s KYC consent = %#v", id, operation)
+		}
+	}
+}
+
+func TestAgentCapabilityRegistryDisclosesAlipayOnlyFunding(t *testing.T) {
+	registry := buildAgentCapabilityRegistry("en", true, true)
+	operations, ok := registry["operations"].([]capabilityOperation)
+	if !ok {
+		t.Fatalf("operations = %T", registry["operations"])
+	}
+	byID := make(map[string]capabilityOperation, len(operations))
+	for _, operation := range operations {
+		byID[operation.OperationID] = operation
+	}
+	for id, wanted := range map[string][2]string{
+		"commission.create":        {"支付宝", "Alipay"},
+		"commission.publish":       {"支付宝", "Alipay"},
+		"order.create":             {"仅支持支付宝", "Alipay in CNY only"},
+		"order.payment":            {"唯一支持的付款渠道", "only supported payment channel"},
+		"wallet.binding.update":    {"仅支持绑定支付宝账户", "only an Alipay account can be bound"},
+		"wallet.withdrawal.create": {"实名核验的支付宝账户", "mainland identity verification"},
+	} {
+		operation, found := byID[id]
+		if !found {
+			t.Fatalf("registry missing %q", id)
+		}
+		if !strings.Contains(operation.Localized["zh-CN"].Description, wanted[0]) {
+			t.Errorf("%s zh-CN description = %q, want it to state %q", id, operation.Localized["zh-CN"].Description, wanted[0])
+		}
+		if !strings.Contains(operation.Localized["en"].Description, wanted[1]) {
+			t.Errorf("%s en description = %q, want it to state %q", id, operation.Localized["en"].Description, wanted[1])
+		}
+		if operation.Localized["zh-CN"].Label == operation.Localized["zh-CN"].Description {
+			t.Errorf("%s zh-CN description still mirrors its label", id)
+		}
+	}
+}
+
+func TestAgentCapabilityRegistryIncludesEveryEditableAgentCardField(t *testing.T) {
+	registry := buildAgentCapabilityRegistry("zh-CN", true, true)
+	fields, ok := registry["editable_profile_fields"].([]capabilityField)
+	if !ok || len(fields) != len(agentcard.EditableFields) {
+		t.Fatalf("editable fields = %T/%d, want %d", registry["editable_profile_fields"], len(fields), len(agentcard.EditableFields))
+	}
+	seen := make(map[string]bool, len(fields))
+	for _, field := range fields {
+		seen[field.Key] = true
+		if field.Localized["zh-CN"].Label == "" || field.Localized["en"].Label == "" {
+			t.Fatalf("field %q lacks bilingual text", field.Key)
+		}
+	}
+	for _, spec := range agentcard.EditableFields {
+		if !seen[spec.Name] {
+			t.Fatalf("registry missing editable field %q", spec.Name)
+		}
+	}
+	for _, required := range []string{"current_focus", "demands", "agent_status", "human_status"} {
+		if !seen[required] {
+			t.Fatalf("registry missing non-Console-summary Agent Card field %q", required)
+		}
+	}
+}
+
+func TestAgentCapabilityRegistryFallsBackToChinese(t *testing.T) {
+	registry := buildAgentCapabilityRegistry("fr", true, true)
+	if registry["language"] != "zh-CN" {
+		t.Fatalf("language = %v, want zh-CN", registry["language"])
+	}
+}
+
+func TestAgentCapabilityRegistryReflectsFeatureFlags(t *testing.T) {
+	registry := buildAgentCapabilityRegistry("en", false, false)
+	operations := registry["operations"].([]capabilityOperation)
+	for _, operation := range operations {
+		if (operation.Category == "runtime" || operation.Category == "attention") && operation.Availability != "disabled_by_server" {
+			t.Fatalf("disabled %s operation %q reports %q", operation.Category, operation.OperationID, operation.Availability)
+		}
+		if operation.OperationID == "capabilities.read" && operation.MinCLIVersion != "0.0.38" {
+			t.Fatalf("capabilities min CLI = %q", operation.MinCLIVersion)
+		}
+		if operation.OperationID == "settings.language.update" && len(operation.AllowedValues) != 2 {
+			t.Fatalf("language allowed values = %#v", operation.AllowedValues)
+		}
+	}
+}
+
+func TestAgentCapabilityRegistrySeparatesIdentityRoutes(t *testing.T) {
+	registry := buildAgentCapabilityRegistry("zh-CN", true, true)
+	operations := registry["operations"].([]capabilityOperation)
+	byID := make(map[string]capabilityOperation, len(operations))
+	for _, operation := range operations {
+		byID[operation.OperationID] = operation
+	}
+
+	profile := byID["profile.update"]
+	if profile.IdentityRoute != "current_identity" || profile.RequiresConsoleHandoff {
+		t.Fatalf("profile.update identity route = %#v", profile)
+	}
+	for _, operationID := range []string{"context.goal.update", "context.intent.update", "context.security.update", "settings.language.update"} {
+		operation := byID[operationID]
+		if operation.IdentityRoute != "current_identity" || operation.RequiresConsoleHandoff {
+			t.Fatalf("%s identity route = %#v", operationID, operation)
+		}
+	}
+	legacyProfile := byID["profile.legacy_update"]
+	if legacyProfile.IdentityRoute != "current_identity" || legacyProfile.Availability != "completed" || legacyProfile.RequiresConsoleHandoff {
+		t.Fatalf("profile.legacy_update compatibility route = %#v", legacyProfile)
+	}
+	for _, operationID := range []string{"identity.legacy_login", "identity.legacy_verify", "identity.logout"} {
+		operation := byID[operationID]
+		if operation.IdentityRoute != "legacy_only" || operation.Availability != "legacy_only" || operation.RequiresConsoleHandoff {
+			t.Fatalf("%s legacy route = %#v", operationID, operation)
+		}
+	}
+	provision := byID["identity.provision"]
+	if provision.IdentityRoute != "provision" || !provision.RequiresConsoleHandoff {
+		t.Fatalf("identity.provision route = %#v", provision)
+	}
+	recovery := byID["identity.recover_account"]
+	if recovery.IdentityRoute != "recover_account" || !recovery.RequiresConsoleHandoff || recovery.MinCLIVersion != "0.0.39" {
+		t.Fatalf("identity.recover_account route = %#v", recovery)
+	}
+	switchAccount := byID["identity.switch_account"]
+	if switchAccount.IdentityRoute != "switch_account" || !switchAccount.RequiresConsoleHandoff ||
+		switchAccount.SameAccountBehavior != "confirm_without_change" {
+		t.Fatalf("identity.switch_account route = %#v", switchAccount)
+	}
+}
+
+func TestAgentCapabilityRegistrySupportsETagRevalidation(t *testing.T) {
+	service := &Service{enableControl: true, enableAttentionV1: true}
+	first := app.NewContext(0)
+	first.Request.SetRequestURI("/api/v2/agent-capabilities?lang=en")
+	service.getAgentCapabilities(context.Background(), first)
+	if first.Response.StatusCode() != http.StatusOK || len(first.Response.Body()) == 0 {
+		t.Fatalf("first response = %d %s", first.Response.StatusCode(), first.Response.Body())
+	}
+	etag := string(first.Response.Header.Peek("ETag"))
+	if etag == "" {
+		t.Fatal("capability response has no ETag")
+	}
+
+	second := app.NewContext(0)
+	second.Request.SetRequestURI("/api/v2/agent-capabilities?lang=en")
+	second.Request.Header.Set("If-None-Match", etag)
+	service.getAgentCapabilities(context.Background(), second)
+	if second.Response.StatusCode() != http.StatusNotModified || len(second.Response.Body()) != 0 {
+		t.Fatalf("revalidation response = %d %s", second.Response.StatusCode(), second.Response.Body())
+	}
+}
+
+func TestAgentAttentionDismissRequiresRevisionButConsoleRemainsCompatible(t *testing.T) {
+	agentRequest := app.NewContext(0)
+	agentRequest.Set("agent_credential_session_id", int64(9))
+	if !attentionDismissRevisionRequired(agentRequest) {
+		t.Fatal("Agent dismissal must require a revision")
+	}
+	consoleRequest := app.NewContext(0)
+	if attentionDismissRevisionRequired(consoleRequest) {
+		t.Fatal("Console dismissal unexpectedly required a revision")
+	}
+}
+
+func TestNeedInputCapabilityUsesLinkedIntentAuthority(t *testing.T) {
+	for _, operation := range buildAgentCapabilityRegistry("en", true, true)["operations"].([]capabilityOperation) {
+		if operation.OperationID == "need.input.create" {
+			if operation.Confirmation != "linked_confirmed_intent" || operation.MinCLIVersion != "0.0.54" || operation.CLI != "eigenflux need input create" {
+				t.Fatalf("incorrect input capability: %#v", operation)
+			}
+			return
+		}
+	}
+	t.Fatal("missing NeedInput create capability")
+}
+
+func TestNeedCaptureReviewCapabilities(t *testing.T) {
+	found := 0
+	for _, operation := range buildAgentCapabilityRegistry("en", true, true)["operations"].([]capabilityOperation) {
+		if operation.OperationID == "need.capture.pending" || operation.OperationID == "need.capture.complete" {
+			found++
+			if operation.MinCLIVersion != "0.0.56" {
+				t.Fatal(operation)
+			}
+			if operation.OperationID == "need.capture.complete" && operation.Confirmation != "linked_confirmed_intent" {
+				t.Fatal(operation)
+			}
+		}
+	}
+	if found != 2 {
+		t.Fatal("capture review capabilities missing")
+	}
+}

@@ -1,0 +1,378 @@
+package config
+
+import (
+	"encoding/json"
+	"fmt"
+	"net"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+type Server struct {
+	Name               string            `json:"name"`
+	Endpoint           string            `json:"endpoint"`
+	StreamEndpoint     string            `json:"stream_endpoint,omitempty"`
+	CommissionEndpoint string            `json:"commission_endpoint,omitempty"`
+	KV                 map[string]string `json:"kv,omitempty"`
+}
+
+type Config struct {
+	DefaultServer string            `json:"default_server"`
+	Servers       []Server          `json:"servers"`
+	KV            map[string]string `json:"kv,omitempty"`
+}
+
+const (
+	homeDirName                         = ".alicerealm"
+	legacyHomeDirName                   = ".eigenflux"
+	defaultAliceRealmEndpoint           = "https://alicerealm.com"
+	defaultAliceRealmStreamEndpoint     = "wss://stream.alicerealm.com"
+	defaultAliceRealmCommissionEndpoint = "https://alicerealm.com"
+	legacyEigenFluxEndpoint             = "https://www.eigenflux.ai"
+	legacyEigenFluxCommissionEndpoint   = "https://www.eigenflux.ai"
+)
+
+var homeDirOverride string
+
+// SetHomeDir sets an explicit home directory override (from --homedir flag).
+// Takes precedence over ALICEREALM_HOME and the legacy EIGENFLUX_HOME variable.
+func SetHomeDir(dir string) {
+	homeDirOverride = dir
+}
+
+// UseHomeDir temporarily selects a Home without changing how future invocations
+// resolve flags, environment and defaults after the returned restore is called.
+func UseHomeDir(dir string) func() {
+	previous := homeDirOverride
+	homeDirOverride = dir
+	return func() { homeDirOverride = previous }
+}
+
+func HomeDir() string {
+	dir, _ := HomeDirInfo()
+	return dir
+}
+
+// HomeDirSource describes how the home directory was determined.
+type HomeDirSource string
+
+const (
+	HomeDirFromFlag    HomeDirSource = "flag"
+	HomeDirFromEnv     HomeDirSource = "env"
+	HomeDirFromDefault HomeDirSource = "default"
+)
+
+// HomeDirInfo returns the resolved home directory and its source.
+func HomeDirInfo() (string, HomeDirSource) {
+	if homeDirOverride != "" {
+		return ensureAliceRealmSuffix(homeDirOverride), HomeDirFromFlag
+	}
+	if v := os.Getenv("ALICEREALM_HOME"); v != "" {
+		return ensureAliceRealmSuffix(v), HomeDirFromEnv
+	}
+	// Preserve existing installations long enough for a non-destructive migration.
+	if v := os.Getenv("EIGENFLUX_HOME"); v != "" {
+		return ensureLegacySuffix(v), HomeDirFromEnv
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, homeDirName), HomeDirFromDefault
+}
+
+// ensureAliceRealmSuffix appends .alicerealm if the path doesn't already end with it.
+func ensureAliceRealmSuffix(dir string) string {
+	if filepath.Base(dir) == homeDirName {
+		return dir
+	}
+	return filepath.Join(dir, homeDirName)
+}
+
+func ensureLegacySuffix(dir string) string {
+	if filepath.Base(dir) == legacyHomeDirName {
+		return dir
+	}
+	return filepath.Join(dir, legacyHomeDirName)
+}
+
+func configPath() string {
+	return filepath.Join(HomeDir(), "config.json")
+}
+
+func Load() (*Config, error) {
+	path := configPath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			cfg := &Config{
+				DefaultServer: "alicerealm",
+				Servers: []Server{
+					{
+						Name:               "alicerealm",
+						Endpoint:           defaultAliceRealmEndpoint,
+						StreamEndpoint:     defaultAliceRealmStreamEndpoint,
+						CommissionEndpoint: defaultAliceRealmCommissionEndpoint,
+					},
+				},
+			}
+			if err := cfg.Save(); err != nil {
+				return nil, fmt.Errorf("create default config: %w", err)
+			}
+			return cfg, nil
+		}
+		return nil, err
+	}
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parse config: %w", err)
+	}
+	backfillOfficialCommissionEndpoint(&cfg)
+	return &cfg, nil
+}
+
+func backfillOfficialCommissionEndpoint(cfg *Config) {
+	for i := range cfg.Servers {
+		server := &cfg.Servers[i]
+		if strings.TrimSpace(server.CommissionEndpoint) != "" {
+			continue
+		}
+		switch strings.TrimRight(strings.TrimSpace(server.Endpoint), "/") {
+		case defaultAliceRealmEndpoint:
+			server.CommissionEndpoint = defaultAliceRealmCommissionEndpoint
+		case legacyEigenFluxEndpoint:
+			server.CommissionEndpoint = legacyEigenFluxCommissionEndpoint
+		}
+	}
+}
+
+func (c *Config) Save() error {
+	path := configPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0600)
+}
+
+func (c *Config) findServer(name string) int {
+	for i, s := range c.Servers {
+		if s.Name == name {
+			return i
+		}
+	}
+	return -1
+}
+
+func (c *Config) AddServer(name, endpoint string) error {
+	return c.AddServerFull(name, endpoint, "")
+}
+
+func (c *Config) AddServerFull(name, endpoint, streamEndpoint string) error {
+	return c.AddServerWithCommission(name, endpoint, streamEndpoint, "")
+}
+
+func (c *Config) AddServerWithCommission(name, endpoint, streamEndpoint, commissionEndpoint string) error {
+	if c.findServer(name) >= 0 {
+		return fmt.Errorf("server %q already exists, use 'alicerealm server update' to modify", name)
+	}
+	c.Servers = append(c.Servers, Server{Name: name, Endpoint: endpoint, StreamEndpoint: streamEndpoint, CommissionEndpoint: commissionEndpoint})
+	return c.Save()
+}
+
+func (c *Config) RemoveServer(name string) error {
+	if name == c.DefaultServer {
+		return fmt.Errorf("cannot remove the default server %q, switch to another server first", name)
+	}
+	i := c.findServer(name)
+	if i < 0 {
+		return fmt.Errorf("server %q not found", name)
+	}
+	c.Servers = append(c.Servers[:i], c.Servers[i+1:]...)
+	credsDir := filepath.Join(HomeDir(), "servers", name)
+	os.RemoveAll(credsDir)
+	return c.Save()
+}
+
+func (c *Config) SetCurrent(name string) error {
+	if c.findServer(name) < 0 {
+		return fmt.Errorf("server %q not found", name)
+	}
+	c.DefaultServer = name
+	return c.Save()
+}
+
+func (c *Config) GetActive(override string) (*Server, error) {
+	name := c.DefaultServer
+	if override != "" {
+		name = override
+	}
+	i := c.findServer(name)
+	if i < 0 {
+		return nil, fmt.Errorf("server %q not found, available: %v", name, c.serverNames())
+	}
+	return &c.Servers[i], nil
+}
+
+func (c *Config) UpdateServer(name, endpoint, streamEndpoint string) error {
+	return c.UpdateServerWithCommission(name, endpoint, streamEndpoint, "")
+}
+
+func (c *Config) UpdateServerWithCommission(name, endpoint, streamEndpoint, commissionEndpoint string) error {
+	i := c.findServer(name)
+	if i < 0 {
+		return fmt.Errorf("server %q not found", name)
+	}
+	if endpoint != "" {
+		c.Servers[i].Endpoint = endpoint
+	}
+	if streamEndpoint != "" {
+		c.Servers[i].StreamEndpoint = streamEndpoint
+	}
+	if commissionEndpoint != "" {
+		c.Servers[i].CommissionEndpoint = commissionEndpoint
+	}
+	return c.Save()
+}
+
+// CommissionBaseURL resolves the separately deployed Commission public API.
+// Local development uses the sibling service's default port; hosted servers
+// require an explicit endpoint so credentials are never sent to a guessed host.
+func (s *Server) CommissionBaseURL() (string, error) {
+	if value := strings.TrimRight(strings.TrimSpace(s.CommissionEndpoint), "/"); value != "" {
+		return value, nil
+	}
+	u, err := url.Parse(s.Endpoint)
+	if err != nil {
+		return "", fmt.Errorf("parse server endpoint: %w", err)
+	}
+	host := strings.ToLower(u.Hostname())
+	if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+		return "", fmt.Errorf("Commission endpoint is not configured for server %q", s.Name)
+	}
+	u.Host = net.JoinHostPort(host, "8090")
+	u.Path, u.RawPath, u.RawQuery, u.Fragment = "", "", "", ""
+	return strings.TrimRight(u.String(), "/"), nil
+}
+
+// WSBaseURL returns the WebSocket base URL for this server.
+// If StreamEndpoint is set, use it directly. Otherwise, derive from Endpoint
+// by replacing http(s) with ws(s).
+func (s *Server) WSBaseURL() string {
+	if s.StreamEndpoint != "" {
+		return strings.TrimRight(s.StreamEndpoint, "/")
+	}
+	u, err := url.Parse(s.Endpoint)
+	if err != nil {
+		return ""
+	}
+	switch u.Scheme {
+	case "https":
+		u.Scheme = "wss"
+	default:
+		u.Scheme = "ws"
+	}
+	return strings.TrimRight(u.String(), "/")
+}
+
+func (c *Config) serverNames() []string {
+	names := make([]string, 0, len(c.Servers))
+	for _, s := range c.Servers {
+		names = append(names, s.Name)
+	}
+	return names
+}
+
+// ===== KV store =====
+//
+// `alicerealm config set/get` is a free-form string key-value store backed
+// by config.json. Global entries live in Config.KV; per-server entries
+// live in Servers[i].KV. Reads with --server check the server map first,
+// then fall back to global. Empty value on set deletes the entry.
+
+// GetKV returns the value stored under key in Config.KV (global), or "" if absent.
+func (c *Config) GetKV(key string) string {
+	return c.KV[key]
+}
+
+// SetKV stores value under key in Config.KV (global) and persists the config.
+// Passing an empty value deletes the entry.
+func (c *Config) SetKV(key, value string) error {
+	if value == "" {
+		delete(c.KV, key)
+	} else {
+		if c.KV == nil {
+			c.KV = map[string]string{}
+		}
+		c.KV[key] = value
+	}
+	return c.Save()
+}
+
+// GetServerKV looks up key first in the named server's KV map, then falls
+// back to Config.KV. The boolean reports whether the key was found.
+func (c *Config) GetServerKV(serverName, key string) (string, bool, error) {
+	i := c.findServer(serverName)
+	if i < 0 {
+		return "", false, fmt.Errorf("server %q not found", serverName)
+	}
+	if v, ok := c.Servers[i].KV[key]; ok {
+		return v, true, nil
+	}
+	if v, ok := c.KV[key]; ok {
+		return v, true, nil
+	}
+	return "", false, nil
+}
+
+// GetServerOnlyKV reads only the named server's private KV map. Internal
+// per-account bookkeeping must use this form so a legacy global value cannot
+// suppress work for every configured server.
+func (c *Config) GetServerOnlyKV(serverName, key string) (string, bool, error) {
+	i := c.findServer(serverName)
+	if i < 0 {
+		return "", false, fmt.Errorf("server %q not found", serverName)
+	}
+	v, ok := c.Servers[i].KV[key]
+	return v, ok, nil
+}
+
+// SetServerKV stores value under key in the named server's KV map and persists.
+// Passing an empty value deletes the entry.
+func (c *Config) SetServerKV(serverName, key, value string) error {
+	i := c.findServer(serverName)
+	if i < 0 {
+		return fmt.Errorf("server %q not found", serverName)
+	}
+	if value == "" {
+		delete(c.Servers[i].KV, key)
+	} else {
+		if c.Servers[i].KV == nil {
+			c.Servers[i].KV = map[string]string{}
+		}
+		c.Servers[i].KV[key] = value
+	}
+	return c.Save()
+}
+
+// ClearServerScopedKV removes key from every server's KV map (leaving the
+// global Config.KV untouched) and persists once. Used to self-heal
+// backend-synced settings that were mistakenly stored under a per-server
+// scope: the sync layer reads global-only, so a server-scoped copy would
+// silently never reach the backend while still shadowing reads via
+// GetServerKV's fallback. No-op if the key is absent everywhere.
+func (c *Config) ClearServerScopedKV(key string) error {
+	changed := false
+	for i := range c.Servers {
+		if _, ok := c.Servers[i].KV[key]; ok {
+			delete(c.Servers[i].KV, key)
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return c.Save()
+}

@@ -1,0 +1,192 @@
+# Signed Skills releases
+
+Official Skills are published from `main` by `.github/workflows/release-skills.yml`.
+Automatic pushes and manual dispatches share the `release-skills` concurrency group.
+`bash cli/scripts/release-skills.sh` outside Actions dispatches that workflow on
+`main`; it requires GitHub workflow permission and does not load local R2 keys.
+The legacy `EIGENFLUX_PUBLISH_SKILLS_WITH_CLI=true` switch dispatches the same
+workflow, while CLI binary publication remains independent.
+
+The macOS/Linux installer's GitHub bootstrap checks the downloaded source's
+`SKILLS_MIN_CLI_VERSION` against the actual selected CLI before copying Skills.
+Incompatible or unknown versions stop installation without replacing existing
+Skills. Publishing a higher minimum does not publish its required CLI binary;
+complete Release CLI before directing new users to that Skills release.
+
+Production `ar-*` Skills must declare stable `major.minor.patch` versions in
+`metadata.version`. Cross-platform CI and `manifestgen` validate every discovered
+production Skill before signing. Missing versions, prerelease/build suffixes and
+leading zeroes fail validation. `ar-localdev` and unrelated Skills are excluded.
+Skill contract tests check behavior without pinning a particular release number.
+
+## Installation entry
+
+`skills/install.md` is the sole source for the `/install` landing page's Agent
+instructions. The page keeps its `/r/<ref>` command; the gateway returns the
+installer origin and referral code with a link to
+`https://updates.alicerealm.com/skills/latest/install.md`. The entry contains no copy
+of the installation or onboarding steps. Referral and invite attribution
+continue through the existing routes.
+
+After verifying the signed Skills bundle, the same release publishes the raw
+installation document to `skills/latest/install.md` with `Cache-Control:
+no-store` and checks both R2 and the exact public URL. Every release publishes
+the document, including changes only to `skills/install.md`; it is independent
+of the signed bundle revision and remains outside the distributable `ar-*`
+Skills. Publication or verification failures fail the workflow.
+
+The gateway entry also uses `Cache-Control: no-store`. Once that entry is
+deployed, subsequent installation-document changes merged into `main` become
+available after Release Skills succeeds, without a website or gateway deploy.
+Existing client upgrade flows remain separate. Publish and verify the CDN
+document before deploying the gateway entry for the first time.
+
+## Sequence ownership
+
+The release script reads and verifies both R2 latest manifests and the highest
+archived signed manifest using the client's Ed25519 trust root. It allocates one
+more than the highest accepted sequence. Read, listing, and signature failures
+stop publication. `cli/.cli.config`'s `SKILLS_SEQUENCE` is only for local build
+artifacts and does not select a production release number.
+
+Before writing latest, the publisher rechecks R2, verifies the signed archive
+through a disposable `skills sync`, and reserves
+`skills/releases/<sequence>/manifest.json` with `If-None-Match: *`. The archive
+and sidecar are also written conditionally under that prefix. Existing release
+objects cannot be overwritten by this publisher. Incomplete releases consume
+their sequence; the next workflow invocation allocates a larger number. A
+workflow rerun is a new release, rather than a rebuild under the old sequence.
+Do not delete archived manifests, which retain the release high-water mark.
+
+After the reservation, the publisher uploads archives before manifests to
+`skills/latest/` and `cli/latest/`. It verifies both origin manifests and both
+CDN manifests, performs a real atomic installation in a disposable directory,
+and checks that a repeated sync is a verified no-op. The CDN tarball check uses
+the same revision query as clients. No agent credentials or active Skills
+folders are involved in this verification.
+
+## Recovery and acceptance
+
+Different contents were previously published with sequence 8. A newly allocated
+sequence greater than 8 permits affected clients to accept the current bundle
+without deleting local metadata or weakening rollback protection. The regression
+test `cli/tests/skills_release_test.go` covers rejecting conflicting signed
+sequence 8, atomically accepting sequence 9, preserving unrelated Skills, and
+rejecting a later rollback to 8.
+
+For changed content, a successful sync returns `source=skills/latest`,
+`verified_manifest=true`, and `atomic=true`. If content is already current,
+`source=local` and `atomic=false` are expected; the higher signed sequence is
+still persisted and `verified_manifest` remains true.
+
+Production releases require the existing R2 and signing secrets plus Python 3,
+Go, GNU tar, and an AWS CLI supporting S3 conditional PutObject. Publishing
+through any other workflow is rejected before credentials are loaded.
+
+## Client synchronization and permissions
+
+Content replacements preserve host-owned top-level files, hidden directories,
+custom Skills and symlinks outside the managed Skill set. This includes Hermes
+metadata such as `.curator_state`, `.bundled_manifest` and `.hub`. Preserve file
+contents and ordinary permission bits; copy symlink text without following its
+target. Keep these local entries outside the signed release's trust boundary.
+Only the installer's `.ef-manifest.json`, `.ef-manifest-*.tmp` and `.ef-stale`
+entries are regenerated or discarded. Retired managed Skills are still removed,
+and signed synchronization still preserves edited managed Skills.
+
+Unreadable host entries and unsupported special files abort replacement before
+the active tree is swapped. Identical-content and metadata-only refreshes do not
+scan host content. Signed sync, local bundle installation and provisional
+offline installation use the same preservation step.
+
+Failed preservation cleans its inactive staging tree even when copied host
+directories are read-only. Cleanup restores owner access only inside inactive
+installer trees, never follows symlinks, and leaves active host permissions
+unchanged. A denied read can be retried after access is granted. Stale staging
+cleanup failures are returned before building or reusing the next stage.
+
+Every heartbeat checks the signed remote manifest. An intact installation with
+unchanged content and sequence returns without creating directories, locks, or
+timestamps in the Skills tree. Directory and manifest checks around content
+verification detect concurrent swaps. Interrupted installations are recovered
+under a short lock before the remote request starts.
+
+Only installation, repair, or signed metadata changes acquire the update lock.
+After rereading local state and repeating rollback and freshness checks, the
+client downloads and extracts directly into the existing same-filesystem staging
+slot, then uses the existing journaled swap. Downloads and installation remain
+inside this lock. Competing writers receive a retryable error. Identical or newer
+releases found during the locked recheck are not overwritten.
+
+Read permission checks reuse manifest and official Skills verification and its
+existing ignored-file rules. They inspect necessary directory and recovery
+metadata without recursively scanning unrelated Skills. Missing paths are valid
+for first installation. File completeness and provisional status are separate:
+an intact provisional bundle remains usable offline and is refreshed online.
+
+Before content replacement, the client also reads existing official directories
+identified by the remote manifest when local metadata is missing or corrupt, and
+host entries that must be preserved. Unchanged checks and metadata-only
+refreshes do not scan third-party content. Before recovery or replacement cleans
+the staging directory, its directory traversal is checked without reading the
+contents of files being deleted. These checks report permission failures before
+creating the update lock; filesystem operations still recheck access under lock.
+
+Permission failures return nonzero even with `--quiet`. The existing command
+error output includes `SKILLS_PERMISSION_REQUIRED`, the operation and original
+filesystem error (including its path), and instructions for the Agent to explain
+the problem, request access through the host permission flow, and retry the exact
+original command after approval. A denial must be reported as incomplete sync.
+The CLI neither grants permissions nor assumes an approval remains valid.
+
+Tests cover read-only no-change checks, read and write permission failures,
+a retry after permissions are granted, concurrent CLI processes, signed sequence
+advancement, offline provisional reuse, ignored files, and recovery before remote
+requests. Agent Home writes and heartbeat freshness requirements are unchanged.
+
+## Retained-content diagnostics
+
+`skills sync` retains locally modified official Skills and intact installations
+that cannot accept a release. Its JSON result keeps the existing fields and adds
+`diagnostics`: the affected absolute path, retention reason, local and target
+Skill versions or bundle revisions when known, and safe recovery instructions.
+Normal invocations also show diagnostics on stderr before any error exit,
+including manifest failures that retain an intact local installation. The
+existing nonzero exit code and empty stdout on failure are preserved. `--quiet` keeps stderr quiet
+for retained-content outcomes and leaves diagnostics in JSON for host adapters.
+Permission and installation errors retain their existing nonzero behavior.
+
+`doctor` reports each modified Skill's exact load path and the same recovery
+instructions in table and JSON output. Back up local edits outside the Skills
+load directory, review and move the modified directory out of the load path,
+then sync the same target directory and refresh the host's Skills context.
+Compatibility failures require upgrading the CLI before retrying. Signed
+rollback failures require a corrected release; retain the local manifest and
+its rollback protection. Skills releases do not require a CLI or plugin release
+unless the minimum supported CLI changes.
+
+Retained bundle results include `retention_code` and, after a verified remote
+manifest was obtained, `target_revision`. Heartbeat maintenance reports these
+outcomes as `blocked`, with the retained revision in `from_version` and
+`running_version` and the attempted target in `to_version`. A failed freshness
+check has no known target. These outcomes never report `no_update`, never issue
+an upgrade adoption receipt, and do not prevent compatible local rules from
+running. The Agent plan names the incomplete update separately from its active
+revision. During remote synchronization, `no_update` denotes a successful
+unchanged-release check, rather than an inability to accept the release. Legacy
+Feed autosync classifies retained updates as `blocked` (or `offline` when the
+remote manifest is unavailable).
+
+## Automatic bridge continuation
+
+A CLI adopted from a version older than the 1.0.10 bridge may continue an
+automatic update in the same heartbeat invocation. Only a strictly newer
+running version at least 1.0.10 with a valid handoff bypasses
+the daily check interval, with at most two continuation handoffs. Identity,
+server update policy, signatures, rollback protection and shared installation
+locking remain required. Ordinary subsequent invocations retain the daily
+interval. Manual updates retain their existing restart behavior.
+
+Publish a new legacy bridge with matching CLI and notarized App versions to
+make this behavior available to historical clients. Immutable historical bridge
+binaries cannot gain continuation logic through a v2-only publication.

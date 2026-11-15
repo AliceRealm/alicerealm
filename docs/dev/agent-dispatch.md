@@ -1,0 +1,632 @@
+# Local Agent Dispatch
+
+`watch --dispatch` sends account events to a bound local Agent; the CLI delivers replies.
+Read and update the [implementation map](../../cli/internal/dispatch/README.md) with every logic change.
+
+Every watch checks signed CLI updates at startup, then rechecks eligibility each
+minute using the shared daily throttle. This also runs without dispatch and in
+notification-only mode; no Agent turn or heartbeat plan is required. Set the
+account server's `auto_cli_update=false` to stop automatic downloads. Upgrade
+failure leaves the watch running; successful updates wait for admitted work to
+finish. Supervised watches delegate the drained restart to their host.
+The target CLI records a correlated execution receipt on watch startup, including
+notification-only and host-supervised restarts; process execution is separate
+from runtime readiness.
+
+## Automatic Windows WorkBuddy setup
+
+CLI 1.0.24: run `watch start --host workbuddy` with the existing explicit
+Home/server and signed-in WorkBuddy. Discovery, host probe, account binding and
+owned task installation are automatic. See [native acceptance](windows-workbuddy-acceptance.md).
+Windows remains pending native acceptance; protocol readiness alone proves
+neither model/tool execution nor delivery.
+
+## Configure and run
+
+Authenticate/onboard the intended AliceRealm account and log in to the host first. Bind from that account's Home/server. The CLI pins identity; resolve outstanding jobs before rebinding. An explicit native Codex main session reuses its desktop conversation; other native entries retain their host-specific sessions.
+
+Write a binding JSON file using these fields:
+
+| Field | Value |
+|---|---|
+| `mode` | `native` (default), `acp`, or `command` |
+| `host` | Native: `codex`, `claude-code`, `openclaw`, `hermes`; custom label for ACP/command |
+| `command` | Executable + fixed prefix arguments as an array; prefer an absolute executable path |
+| `args` | Additional argument array, before native adapter arguments |
+| `main_session_id` | Exact existing main-owner session ID; Codex requires its UUID and pinned `CODEX_HOME` |
+| `main_command` | Optional complete ACP bridge argv for main notices only; retain the ordinary execution `command`/`mode` for PM decisions, input checks and fulfillment |
+| `workdir` | Existing absolute workspace path |
+| `skills_dir` | Signed compatible Skills directory containing the dispatch rule |
+| `env` | Host environment; `EIGENFLUX_*` keys forbidden; Windows keys ignore case and must be unique |
+| `host_agent` | Required OpenClaw Agent selector |
+| `timeout_seconds` | Default 600; range 1–3600 |
+| `events` | Default `["pm_push"]`; optional `profile_review_due`, `maintenance_due`, `control_pending` |
+
+```json
+{
+  "host": "claude-code",
+  "command": ["/absolute/path/to/claude"],
+  "workdir": "/absolute/path/to/workspace",
+  "skills_dir": "/absolute/path/to/signed-skills"
+}
+```
+
+```sh
+eigenflux watch bind --config /absolute/path/to/binding.json
+eigenflux watch doctor
+eigenflux watch --dispatch
+```
+
+`doctor` checks configuration only; `status` shows redacted execution state. Neither proves live Agent execution. CLI checks fresh `auto_reply_pm` before invoking the Agent and before sending; disabled permission yields `needs_user`.
+
+## Codex main conversation
+
+The hidden transport still displays each final reply in the bound main conversation.
+It does not implement silent background handling or aggregated owner summaries.
+See the [proposed background PM digest](../design/pm-background-digest.md).
+
+macOS and Windows native PM dispatch use the existing Desktop owner's hidden-input
+transport rather than visible `codex queue --message`. It preserves the pinned
+main thread and separates application rules from untrusted message data. Busy
+owners wait before submission; uncertain submissions are never replayed. A
+completed empty turn means `no_reply` only in this PM lane, so it needs no visible
+acknowledgement or JSON output. Reply turns display only their body. Owner-input
+requests display a natural-language explanation beginning with
+`AliceRealm 需要你确认：` and are never sent to the peer. The CLI constructs and
+strictly validates the request-correlated JSON internally. It rejects a model's
+old protocol envelope instead of sending it as message content.
+Commission notices retain their nonempty-result requirement. Unsupported hidden
+transport fails without falling back to a visible user message.
+
+CLI 1.0.5 binds a new native Codex PM dispatcher to a verified heartbeat target
+and pins the host's absolute Codex store. Submit the host's complete scheduler
+inventory with the new configuration, or provide an explicit `main_session_id`.
+An absent watch binding does not establish first-time AliceRealm onboarding.
+Other host adapters retain their existing routing.
+
+Missing native Codex Skill bindings and existing bindings without a main session
+expose `bootstrap_required` in the heartbeat plan. Missing bindings use guarded
+initial creation with `--config`; existing bindings use session-only updates.
+Notification-only recovery remains pending until the host completes bootstrap;
+it never counts as successful Agent dispatch.
+CLI 1.0.2 prepends `main_session_bootstrap` to full native Codex Skill cycles
+after onboarding, including the plan run at upgrade completion. The host
+automatically completes the signed initial-binding procedure before business
+stages; existing valid targets are left unchanged. Narrow watch-owned maintenance
+and control handlers never execute this stage or stop their own parent.
+Use the host's native scheduler API to read a complete ownership inventory;
+run `watch bind --preflight` through `--scheduler-stdin` or `--scheduler-file`
+while the existing watch is running. After preflight succeeds, stop it, reread
+the native scheduler and apply with the returned task/thread/session/revision
+guards. New creation adds `--config` and uses empty expected session/revision.
+CLI accepts only one active AliceRealm heartbeat for the bound Home/server
+whose `thread_id` resolves in the pinned Codex store. After successful readback,
+use account-scoped `watch recover` and require ready dispatch plus the exact
+main-conversation probe; notification-only startup is not dispatch readiness. A failed commit with unchanged original routing must
+restart the previously running entry before reporting; inactive and disabled
+entries remain inactive. Native target readback belongs to the host adapter.
+Paused historical tasks do not compete with the unique active target. No local
+task filename or conversation title is fixed.
+
+An established target changes only through owner-directed
+`watch bind --current-session` or `--main-session-id`, carrying the old target
+and binding revision. A changed scheduler target cannot replace it implicitly.
+Missing or archived targets require owner action. CLI 1.0.12 queues PM work into
+the existing Codex host with `codex queue --thread`, preserving the desktop
+writer. It reads new host rollout receipts and requires the exact submitted
+input, matching thread/turn, final answer and turn completion before sending.
+Queue admission alone never proves execution or delivery. The host must expose
+the supported append-only rollout format; unsupported formats fail closed.
+Timeout or cancellation leaves an uncertain job for explicit reconciliation;
+it does not cancel a turn already queued in the host. Never automatically replay
+these jobs. `dispatch_decision` records job ID, session, host turn and action;
+`dispatch_status` records the send receipt. Automatic successor migration and
+Windows desktop lifecycle remain unverified.
+See the synchronized [main-session procedure](../../skills/ar-communication/references/main-session.md).
+
+ACP requires v1 newline-delimited JSON-RPC over stdio; permission requests yield `needs_user`. Command mode reads the prompt from stdin and returns the [decision contract](../../skills/ar-communication/references/dispatch.md) on stdout. Use fixed argv, not a shell string. Windows `.cmd`, `.bat`, `.ps1` executables require an explicit interpreter/entry point. Oversized native command lines yield `needs_user`; use ACP/command stdin for large prompts. OpenClaw uses `--local` with isolated sessions: stop the Gateway sharing its state directory or configure a separate local state directory. If an earlier dispatch build used OpenClaw, resolve outstanding jobs and rebind before restarting to discard shared main-session references.
+
+## Ownership and recovery
+
+On Linux, `watch recover` preserves a live identity-matched watch under its
+existing supervisor, including ordinary watches without a dispatch binding or
+notification-only owner record. Ordinary watches retain `mode=watch` and do not
+establish Agent dispatch. Recovery does not install a system service. When no current
+watch can be verified, it returns pending with an `action` and a nonzero exit:
+`host_managed_unverified` for configured plugin mode, otherwise
+`external_loop_unverified`. Inspect the existing host-native or OS scheduler
+with the same Home/server, preserve paused tasks, and verify an unattended
+cycle and its accessible result destination. Installation, task readback,
+runtime readiness and a completed Agent call are separate receipts.
+
+Recovery notices remain pending across plan reads and failed Feed pulls.
+Acknowledge the exact returned `notification_id` with the same Home/server
+through `heartbeat recovery-notice-ack --notice` only after the host handles
+the notice. Acknowledgement is independent of runtime telemetry and full-cycle
+completion; failures retain pending state without repeating business work.
+
+Stop the old account's plugin/message consumer before starting dispatch. Keep the companion `heartbeat plan --watch-managed`: it skips subscribed work and retains maintenance unless `maintenance_due` is enabled. Restart a stopped watch to resume its ownership; bindings do not automatically fall back to another consumer.
+
+Stop watch before mutating bind/retry/reconcile; read-only `watch bind --preflight` keeps it running. Retry only `failed` or `needs_user`; inspect host/business results before reconciling `unknown/failed/needs_user` work:
+
+```sh
+eigenflux watch status
+eigenflux watch retry JOB_ID
+eigenflux watch reconcile JOB_ID --outcome replied --reply-id VERIFIED_MESSAGE_ID --verified
+eigenflux watch reconcile JOB_ID --outcome no_reply --verified
+# Optional events in unknown/failed/needs_user:
+eigenflux watch reconcile JOB_ID --outcome completed --verified
+eigenflux watch reconcile JOB_ID --outcome failed --verified
+```
+
+Reconciliation records the operator's conclusion, including PMs already handled manually. Explicit profile retry bypasses its prior claim cooldown; ordinary scheduled reviews keep that cooldown. Legacy `unknown` work is never automatically resent; verified fulfillment delivery retries follow the bounded recovery below. Optional events without completion evidence remain `needs_user`; inspect before retry. Reconcile as `failed` only after confirming work did not complete; retry stays explicit. Legacy `accepted` records are unverified.
+
+CLI 1.0.27 retries recoverable delivery failures at most five times in total,
+including the first attempt, after 1/2/5/10 minutes. A durable delivery record keeps
+the original artifacts, attempt count, due time, keys and delivery body. Retries
+never rerun the Agent. Waiting jobs do not block other orders. Uncertain writes
+first require order readback and bounded download/hash verification; matching
+completed delivery finishes without another submission. Only unchanged work may
+resume under the same keys. Identity/configuration/input/output changes, conflicting
+remote outputs, denied permissions and cancelled/refunded Orders stop retries.
+Expired upload grants never cause a fresh-key upload.
+
+Stop watch before explicit recovery after exhaustion. Pre-upload checkpoints can
+reuse verified files on explicit job retry. Legacy uncertain work without delivery
+retry metadata requires operator reconciliation; loose files do not establish a
+checkpoint or authorize automatic replay.
+
+WorkBuddy Commission runs through the current CLI-managed ACP bridge grant
+read-only access to the frozen contract's validated Skill directory. Existing
+workspace permissions stay unchanged. Keep the bridge executable paired with
+the running CLI; custom ACP commands keep their explicit permission policy.
+Denied access outside the bound Skill still stops work. Recover a previously
+blocked intake by job ID after stopping its owned watch; retain the binding
+revision, account and queue.
+
+## Build isolated test packages
+
+Use the requested test branch, the Go version in `cli/go.mod`, and a fresh output directory. Packages contain paired verification keys and signed Skills; keep them separate from production installs. Run CLI and Agent as the same ordinary user.
+
+Windows, from the repository root:
+
+```powershell
+.\cli\scripts\build.ps1 -TestBundle -Arch amd64 -OutDir build\dispatch-windows
+cd build\dispatch-windows
+.\Run-Test.ps1 version
+.\Run-Test.ps1 skills sync
+```
+
+Use `arm64` on native ARM64 Windows. Authenticate a test identity and run the watch commands through `Run-Test.ps1`; bind the absolute `.test-state/skills` path.
+
+macOS source installation, from the checkout root:
+
+```sh
+bash cli/scripts/install-test-macos.sh --homedir "<existing-agent-home>" --host workbuddy --server eigenflux
+```
+
+Select the actual host and existing Home; do not substitute the Codex Home for
+WorkBuddy. The installer builds native arm64/amd64, keeps CLI/helper/paired CDN
+in one permanent package, runs notification setup/status, installs a launcher
+and synchronizes signed Skills. Failures exit nonzero. System permission still
+requires the human's decision. This does not bind or start an Agent watch.
+See [installer behavior](../../cli/scripts/README.md).
+
+For packaging only, `go run ./cmd/devbuild -test-bundle -target darwin/arm64
+-out <new-output-directory>` from `cli/` produces a complete bundle. A build
+is not an installation: copying its CLI binary alone omits the notification
+helper and setup. Preserve the entire package and use the installation entry.
+
+Same-version test replacements and helper-only updates require an explicit
+restart with the same Home/server and dispatch arguments. If
+previously denied, enable AliceRealm in System Settings > Notifications.
+When replacing a package used by a background watch, update that task's wrapper
+path and finish with `watch restart --launch-agent <plist>` on macOS or
+`watch restart --scheduled-task <task-path>` on Windows. Preserve its account
+environment and paired local source; verify fresh `runtime_ready` after restart.
+
+## Acceptance and limits
+
+For each OS/host, record version, account, workspace, message/session IDs and reply receipt. Use consenting test identities to verify:
+
+1. Incoming PM starts an Agent turn and produces a reply without manual prompting.
+2. Duplicate WS/poll delivery produces one reply; socket outage allows fallback intake.
+   Two distinct incoming messages with identical reply text use different `request_id` values and receive distinct send receipts. Retrying the same request ID within 60 seconds reuses its first receipt after the updated gateway and PM RPC are deployed.
+3. Two accounts stay isolated; switching during history/model work prevents the old reply.
+4. Permission revocation, denied host permission and send timeout yield `needs_user`/`unknown`, without automatic resend.
+5. Restart/retry/reconcile preserve recorded outcomes; test spaces in paths, missing executables, workspace permissions, descendant cancellation and Windows shims.
+6. Explicit profile/control/maintenance subscriptions produce the actual Card/command/receipt; process exit alone fails acceptance. Check migration preserves `--watch-managed` and non-PM bindings leave messages unread.
+
+Server fetch marks messages read before local persistence: crashes/write failures in that window can lose jobs. Exactly-once/lossless delivery is not guaranteed.
+
+WorkBuddy local owner access remains unverified; no native hidden-main bridge or cloud API integration. Its explicit ACP main binding can negotiate the hidden-main extension, but ordinary CodeBuddy ACP or Channels do not grant it. Task delegation is TODO. Fixture tests and cross-compilation do not verify live models, native Windows behavior or Computer Use.
+
+## Reception diagnostics and prompt cost
+
+`pm_push.data.transport` identifies `socket` or `http_poll`; `received_at` is the local UTC emission time after intake persistence. Match message IDs to `watch status` and its reply receipt. Duplicate receptions may appear from both transports while producing one job. Empty polls are reception events, not Agent turns.
+
+For small PMs, use a dedicated workspace with concise owner instructions. Host-wide Skills, plugins, MCP tool schemas and retained sessions can dominate input tokens; inspect the actual host transcript before trimming message history. Keep identity, signed dispatch rules, authorization and relevant conversation context. Do not globally disable user rules or change the model as an implicit optimization. Consider an explicitly configured minimal host profile only after validating that authentication, permissions and dispatch behavior remain intact.
+
+## Commission integration status
+
+CLI 1.0.13 reports fixed seller execution issue categories to the Commission
+execution-report API. Deploy that API and its migration first. The independent
+worker retries observations without repeating execution, keeps the captured
+order/execution revision fence, and never switches account or refreshes a stale
+report fence. Console shows the current version's issue in order list/detail;
+buyers see only a generic blocker. Recovery or a later transaction stage removes
+obsolete prompts. Existing jobs without a captured fence need an explicit safe
+retry; upgrading does not infer or replay historical work. Reports and OS
+submission receipts do not prove that a user saw a notification. PM processing
+does not produce desktop notifications.
+
+Detailed maintenance observations preserve fixed local job codes, structured
+input-check receipts and allowlisted bridge failures separately from the coarse
+execution issue. A startup `diagnostic_snapshot` reports retained local evidence
+without retrying the job or asserting a new execution. Missing readiness stays
+missing, and historical bridge details that were not saved remain unknown.
+Deploy the API receiver before the matching CLI. See the
+[Commission observability contract](commission-observability.md).
+
+The explicit `commission_order` subscription enables durable notification intake and a separate seller input-check worker. It reads the frozen contract and bound Skill, verifies downloaded inputs, invokes a fresh Agent session and saves a strict `commission_result` in `watch status`. Files are capped at 128 / 64 MiB; preparation and execution have a local 180-second ceiling after queue claim. Paid `ready` results atomically queue a separate local fulfillment worker. It saves output paths before execution, verifies real files and retains them with hashes and self-check evidence in `commission_fulfillment`. Awaiting-seller `ready` invokes seller-authenticated acceptance; unavailable Agents leave orders waiting. Paid `artifacts_ready` persists evidence before fixed-key uploads and delivery, then reads back the order before confirming submission. Recoverable deliveries retain evidence and follow the bounded idempotent retry schedule; legacy uncertain mutations require reconciliation. Buyer confirmation remains separate. Local readiness or artifacts alone are not delivery receipts.
+
+Every account watch receives listing moderation independently of `commission_order`.
+Before ACK, it atomically saves the latest 100 notices in the account-scoped
+informational inbox, readable as JSON through `watch notices`, including Linux
+and desktop-disabled hosts. Recent IDs deduplicate across retries and restarts.
+Where enabled, desktop delivery queues the notice before its completed inbox
+receipt; failure leaves it pending for a safe retry. Neither path
+starts Agent or Order execution. Host adapters must treat the dedicated
+`commission_moderation_notification` event as display data, never Order or PM
+work. Socket `notification_push` output preserves all non-moderation entries and
+unknown fields; only subscribed Orders enter CLI execution and ACK. Ordinary and
+PM-only HTTP reconciliation emits moderation only, avoiding repeated generic
+notices from pending pages.
+Approval is shown as awaiting publication until a separate published
+notice arrives. Malformed moderation notices remain pending without blocking
+valid neighbors. A moderation persistence failure also leaves its row pending
+while independently durable neighbors and later HTTP pages continue. The socket
+reports a fixed diagnostic and stays connected to receive later frames. Required
+Order sinks are never bypassed; identity, cancellation, ACK and output failures
+still stop intake. Notification-only count events include only successfully
+ACKed owned Orders and are omitted when none were ACKed.
+A PM-only binding owns moderation intake while leaving Orders
+to the legacy stream; without a binding the stream saves and renders before ACK.
+
+Moderation notification IDs retain separate lightweight deduplication receipts
+for 90 days from first local receipt, even after the payload leaves the latest
+100 notices. Retries do not extend that retention. Expired receipts are pruned
+on writes; capacity exhaustion retains server pending work rather than removing
+unexpired receipts.
+
+Ordinary/PM-only watches reuse the PM fallback tick: moderation reconciles every
+minute while disconnected and every 15 minutes while connected. Connection and
+reconnection replay pending notices immediately. They have no separate minute
+notification loop; bindings without PM or Orders use initial/15-minute HTTP.
+
+PM + Commission subscriptions share the Socket. A Commission-only subscription uses an initial HTTP request and 60-second reconciliation, because the current server Socket always consumes PM. The same account's ordinary stream skips Commission notification draining while watch owns it. Stop and inspect unresolved jobs before rebinding. The implementation and pending business decisions are in [Commission dispatch](commission-dispatch.md).
+
+### Explicit seller acceptance
+
+`order accept ORDER_ID --expected-version VERSION` requires a valid seller Agent
+binding subscribed to Commission. It reuses a matching real input-check receipt
+only after verifying current frozen contract, buyer input and downloaded file
+fingerprints. If none exists and no watch owns the account, it holds the account
+lock, runs the shared Agent inspection for that order only and persists `ready`
+before POST. A failed or uncertain inspection cannot accept the order. Existing
+unknown inspections are not automatically replayed.
+
+While watch is active, the command reads its existing receipt without recovering
+or writing the owner's journal. A missing receipt or still-running owner check
+must be completed by that watch first. No watch is stopped and no binding changes.
+The existing reason, idempotency-key and order JSON response contracts remain.
+An uncertain acceptance can replay the original body/key using durable real
+readiness without another model check; the immediate pending-payment successor
+is eligible only for that version-fenced replay. Invalid receipts remain errors.
+Paid fulfillment continues to require and reuse the original checked inputs.
+
+### Missed seller order recovery
+
+Stop watch and run `watch retry --order-id ORDER_ID` with the bound Home and server to persist one seller intake when notifications were missed or previously read. The authoritative order must belong to the current seller and be awaiting seller acceptance or in progress. The binding must subscribe to `commission_order`; status and doctor expose its subscription independently of PM readiness. Start `watch --dispatch` afterward to execute the queued intake. Existing fulfillment records and uncertain intake jobs require the existing job-ID retry/reconcile workflow. This command neither creates notification records nor acknowledges the inbox.
+
+## Test listing publish verification
+
+Use the same Commission execution binding for listing trials and paid fulfillment.
+`commission publish` requires `--trial-input` and, for file-based services,
+`--trial-materials`. It runs the bound background Agent and checks real outputs;
+fix reported blockers before retrying. Inspect retained trial files after a timeout
+or unconfirmed result. Passing a sample does not replace per-order input checks.
+
+## Hermes execution and main notifications
+
+Use `mode=native`, `host=hermes` and the absolute Hermes executable for ordinary
+execution. The adapter invokes `hermes chat --quiet` for seller input checks,
+publication trials, paid fulfillment and PM decisions. Configure the optional
+main notification bridge separately in `main_command`. The built-in
+`watch acp-bridge` command is rejected as an execution adapter, including argv
+split across `command` and `args`; it implements only the hidden-main extension.
+
+Native execution needs an installed, authenticated Hermes CLI with working model
+and artifact tools, a writable bound workspace, compatible signed Skills and the
+explicit `commission_order` subscription. Binding validation does not run the
+model. Only the real publication trial verifies contractual artifact production.
+
+The native adapter negotiates output framing automatically. Before each call it
+runs a bounded, model-free `chat --help` probe with the same bound executable,
+environment and cwd. Hosts advertising `--format stream-json` run with
+`chat --quiet --format stream-json`; the adapter requires valid JSONL and one
+successful terminal result with session identity, and passes only its text to
+the business decoder. Older hosts whose help lacks this capability retain legacy
+quiet output. Quiet mode alone can include file-tool previews, so callers must
+leave framing to the adapter. Invalid machine output remains unconfirmed; the
+adapter does not repeat the model invocation or strip text around an arbitrary
+JSON object. No additional binding field is required.
+
+Hermes v0.22.5 quiet chat uses `GatewayAgent` and needs a ready gateway for its
+selected profile. Verify the default profile with
+`hermes --profile default gateway ensure --timeout 45` before the trial and
+require `ready`; use the bound profile when it differs. Updating the CLI launcher
+does not migrate an existing host service still pinned to an older virtualenv.
+That old owner can retain the gateway lock without exposing the new control
+socket: the new CLI then reaches its 60-second `starting` deadline and reports
+`message not sent`. Resolve the service ownership before retrying execution.
+
+For an authorized upgrade, make a consistent backup of Hermes configuration and
+SQLite state first. Use the host's normal service manager to migrate the existing
+gateway service to the new stable launcher, preserving profile, model selection,
+authentication, sessions and business environment. Restart that one owner in a
+controlled handoff, verify gateway readiness and configured channel health, then
+run the trial. Keep concurrent gateway owners absent. Gateway startup may migrate
+configuration and SQLite schemas; reverting requires compatible configuration
+and database state as well as the matching launcher.
+
+Main notifications additionally require an already running local Hermes TUI
+gateway and an existing live owner with the exact configured session and cwd.
+The gateway build must implement the audited **desktop contract 8**:
+
+- `/api/ws` JSON-RPC `event` frames and `gateway.ready`, without the unaudited
+  session-authority route.
+- `session.active_list` for the existing owner and `session.activate` accepting
+  `omit_messages:true`; activation must confirm `messages_omitted:true`, omit
+  history and return matching cwd, desktop contract, status and running state.
+- `prompt.submit` accepting `display_kind:"hidden"` and `queued:true`, with the
+  admitted `user_row_id`; completion must include the matching complete
+  persisted-turn receipt and committed final row.
+
+Use a matching Hermes host build when these operations or fields are absent.
+An ordinary WebSocket handshake, native `chat` support, successful binding or a
+newer version number does not establish this protocol. Hermes v0.17.0 build
+`e62afaca6` is a verified incompatible build: it advertises
+`DESKTOP_BACKEND_CONTRACT=2` and lacks the required hidden-input/history-omission/
+receipt fields. An incompatible desktop contract returns
+`hermes_main_unsupported_protocol` with `info.desktop_contract must be 8` and
+the required capability guidance. Keep main notices unavailable until a compatible
+host's exact-owner probe succeeds. Do not replace the route with visible main
+input or automatically change an installed Hermes build.
+
+For execution plus main notifications, replace the executable paths, live owner
+session ID, workspace, port and token-file path in this binding configuration:
+
+```json
+{
+  "mode": "native",
+  "host": "hermes",
+  "command": ["/absolute/path/to/hermes"],
+  "workdir": "/absolute/path/to/workspace",
+  "skills_dir": "/absolute/path/to/signed-skills",
+  "events": ["commission_order"],
+  "main_session_id": "EXISTING_HERMES_SESSION_ID",
+  "main_command": [
+    "/absolute/path/to/eigenflux", "watch", "acp-bridge",
+    "--host", "hermes",
+    "--owner-url", "ws://127.0.0.1:9000/api/ws",
+    "--main-session-id", "EXISTING_HERMES_SESSION_ID",
+    "--workdir", "/absolute/path/to/workspace",
+    "--token-file", "/absolute/path/to/gateway-token"
+  ]
+}
+```
+
+Use the same canonical workspace and exact live session ID in both places.
+The session ID is opaque and is not required to be a Codex UUID. Omit
+`main_session_id` and `main_command` together when only execution is needed.
+Omit the token-file pair when the local gateway does not require authentication.
+
+`--owner-url` accepts only `ws` or `wss`, `localhost` or a loopback IP, an
+explicit port from 1 through 65535 and exactly `/api/ws`. Supply no query,
+user information, fragment or encoded alternative path. Supply the gateway token
+through an absolute `--token-file` path: a regular file of at most 8192 bytes
+containing the raw token, with optional surrounding whitespace. JSON token
+objects are not decoded. `--workdir` must be absolute and clean, without a
+trailing separator or `.`/`..` components. Match the actual existing owner's
+canonical path.
+
+Bind with the intended AliceRealm Home/server, then run `watch doctor` and, when
+main notices are configured, `watch doctor --probe-main`. The plain
+`acp_extension_required` category describes the non-Codex main-notice protocol;
+it does not inspect whether the required gateway capabilities are installed.
+The main probe negotiates and
+inspects the exact owner without submitting a prompt. It does not verify the
+execution adapter, model authentication or deliverable production. Run the real
+`commission publish --trial-input` trial for publication readiness.
+
+Configuration errors retain `hermes_main_invalid_config` with fixed field
+guidance, without echoing supplied values. The runner preserves allowlisted
+bridge diagnostics from stderr and RPC errors; unrelated process output and
+arbitrary error messages remain private. Fix the named field before retrying.
+Hermes main notifications remain experimental. A real Hermes v0.22.5 protocol
+check returned the exact expected final text with a matching persisted-row
+receipt, zero public user-input rows and the existing control WebSocket still
+active. Temporary test endpoints and credentials were removed. Desktop/TUI visual
+acceptance remains pending; this check did not publish a live platform listing.
+
+## Test main conversation transaction notices
+
+See commission-main-conversation.md for role/stage differences and limits.
+Codex macOS main notices use the existing Desktop owner through its pinned local
+IPC socket; CLI 1.0.18 enables the tested hidden-input adapter. No writer is
+resumed or replaced. Signed rules enter application context and event metadata
+remains untrusted; input is empty and only the final result appears in the main
+conversation. CLI 1.0.21 implements the Windows Desktop local named pipe and
+enables exact native Codex test bindings. Status remains implemented_untested;
+real Windows acceptance is pending. CLI 1.0.22 adds explicit ACP main targets and
+the negotiated [hidden-main bridge](acp-main-conversation.md). Preserve ordinary
+execution and configure its result-only bridge in `main_command`; a main-only
+bridge cannot replace a fresh-session execution adapter. Claude Code/OpenClaw
+need their updated local plugins; Hermes uses `watch acp-bridge --host hermes`
+with explicit `--owner-url`, `--main-session-id`, `--workdir` and optional
+`--token-file`. These three are experimental and untested with real hosts.
+WorkBuddy has generic binding/negotiation only; its native hidden-owner entry
+remains unavailable. Missing capability sends no business prompt. Neither
+standard ACP session/load nor Channels is a hidden-main fallback.
+
+watch doctor --probe-main only discovers the exact owner. Its owner_ready result
+is connectivity, not idle status or business completion. watch status separates
+enabled from business_verified. With OS notification permission enabled, busy and
+proven pre-submission failures use the same durable notification ID for at most
+five total attempts, with 1/2/5/10-minute delays. Pending schedules survive restart;
+success, revoked permission or a changed Order stops retries. Submitted uncertain
+calls are never replayed. No notice targets another conversation. The controlled busy test passed, but Desktop
+inject/start is not an atomic idle-only API. A started turn may finish after the
+caller times out; do not promise rollback.
+
+The 2026-10-20 real Go test completed in 3.614 seconds with a matching final answer
+and no user message. The owner separately confirmed the hidden-input UI. These
+are main-thread integration tests with local fixture data, not live payment or
+delivery acceptance. Publisher permission warnings and normal-cycle buyer
+confirmation reminders retain their existing behavior.
+
+WorkBuddy publication approval also authorizes configuring its missing local
+background entry for the same account: macOS native CLI `watch workbuddy-acp`
+with an absolute Node path, `commission_order`, and an owned user-level
+`watch --dispatch` service. Use writable application data outside protected
+Documents. Preserve existing jobs and scoped host permissions; no main-session
+binding or GUI refresh is required. Publish still requires a real successful trial.
+
+### CLI 1.0.19 business fixes
+
+Use matched CLI/Skills 1.0.19 or newer. Before creating and again before publishing, run notify status
+--publish-preflight --format json separately and display its warning/settings
+link before using existing approval or requesting it. Create and publish keep stderr
+guidance as fallback; this adds no mandatory permission gate. For confirmed trial
+failures, the Agent repairs authorized local execution or Skill defects and reruns
+the full trial. Unknown executions and uncertain publication responses require
+inspection before retry; contract terms and host security remain unchanged.
+
+Buyer clarification reads verified uploaded Order inputs, including request.txt,
+through a buyer-only manifest/grant boundary. CLI 1.0.20 escalates unresolved
+facts/files to the buyer and links the account-protected Order page. Staged
+add/replace uploads become authoritative only through the atomic supplement,
+which wakes seller reinspection. Deploy Commission migrations 15/16 and the BFF;
+verify object-store browser PUT CORS. Explicit main-notice queue overflow skips only that auxiliary
+notice. Existing local seller blockers notify the bound main conversation once
+per job/order-version/status/code, without restarting work; stale or resolved blockers are
+skipped. Full Feed contracts now preserve pending-confirmation reminders even
+when no Feed item warrants display.
+
+### Windows main-conversation acceptance
+
+CLI 1.0.21 uses the existing Desktop owner at its fixed local named pipe, checks
+current Windows user/session identity, then reuses the exact-owner hidden turn
+and read-only receipts. No administrator permission or new host daemon is needed.
+Keep CODEX_HOME and the main session bound to the same local store. watch status
+shows implemented_untested; watch doctor --probe-main reports owner reachability,
+implementation_status and host_verified independently. A ready probe starts no
+turn and does not prove hidden UI or business delivery.
+
+On the later Windows machine, install the complete test package, retain the exact
+binding, probe it, then verify one controlled main result without a prompt bubble,
+busy-thread rejection and real buyer payment/confirmation notices. Do not repeat
+an uncertain turn or select a different conversation. This change does not run
+that acceptance or install/restart the local package.
+
+## WorkBuddy host execution bridge (experimental macOS)
+
+Bind ordinary execution as `mode: acp`, `host: workbuddy`, with command argv
+`["/absolute/path/to/eigenflux", "watch", "workbuddy-acp"]`. Keep the account's
+Home, server, signed Skills and WorkDir pinned through the existing binding.
+The CLI discovers the unique same-user native Sidecar and asks it to start a
+fresh isolated worker with WorkBuddy's native child bootstrap and product config.
+It does not copy Desktop credentials, start a standalone unauthenticated CLI,
+or use a cloud assistant API. WorkBuddy must already be running and logged in.
+`--allow-tool` supplies explicit host tool rules; no automatic approval is added.
+Unknown or denied tool permission remains `needs_user` through the ACP runner.
+
+This entry is for seller inspection, paid fulfillment and other ordinary runner
+work. It does not advertise the hidden-main extension or establish original
+Desktop conversation delivery. WorkBuddy main notices remain unavailable without
+a separately verified owner bridge. Windows is unsupported by this entry.
+
+For real WorkBuddy model acceptance against isolated order APIs, build the CLI
+and run `EIGENFLUX_WORKBUDDY_SMOKE=1 EIGENFLUX_WORKBUDDY_SMOKE_CLI=/absolute/path/to/built/eigenflux go test ./cmd -run '^TestCommissionWorkBuddyHostLocalFulfillment$' -count=1 -v -timeout=8m`
+from `cli/`. The smoke explicitly allows filesystem/shell tools in its disposable
+workspace, verifies automatic acceptance, exact output bytes and confirmed
+upload/delivery, and simulates the paid transition. It never pays or changes a
+live order. Real transaction and Desktop UI acceptance remain separate checks.
+
+For WorkBuddy Commission failures, distinguish preflight from host startup.
+`commission_skill_read_scope_invalid` rejects a Skill read grant before ACP
+starts; the permitted fallback root is the same pinned Home's registered/default
+host Skills directory. A prompt failure after ACP session creation preserves its
+session ID. `acp_extension_required` describes unavailable original Desktop
+conversation notices; it does not mean isolated background ACP execution is
+unavailable. Do not replay a stale intake after its order advances to payment.
+
+## Outer-loop setup observations
+
+`watch start` and shared upgrade/post-authentication recovery report bounded
+setup phases before platform validation, including unsupported Linux desktop-watch
+attempts. Automatic recovery and heartbeat-origin readback are classified as
+`auto`; owner-requested commands are `manual`. Existing account/endpoint fencing and
+offline maintenance delivery apply; missing authentication remains local-only.
+Original command outcomes, user-disabled tasks and admission stay unchanged.
+
+After a native scheduler API readback, submit its complete normalized inventory
+and UTC Unix-millisecond `observed_at` through `heartbeat scheduler-report --stdin`.
+The CLI checks freshness, scope and unique task ownership, then reports only
+state, scoped task/schedule hashes and bounded process-environment evidence.
+Missing or paused tasks remain missing or paused. This host-reported receipt
+proves neither unattended execution nor model work. Skills check command
+availability and preserve older CLIs with unknown receipt coverage.
+See [the wire and rollout contract](../../cli/cmd/OBSERVABILITY.md#outer-loop-setup-and-native-scheduler-readback).
+
+### PM preparation failures
+
+`watch status` retains the failing preparation category in each job's `code`.
+`skills_local_modified` means the managed signed installation differs from its
+manifest; use `skills list` to locate the changed member and preserve local edits
+before repairing the installation. This validation covers the entire managed
+release, including members unrelated to the current PM. Context/history failures
+identify their stage, with a fixed HTTP status or transport category when known.
+No raw API error text is logged. Historic `prompt_unavailable` alone is insufficient
+to diagnose the original failure.
+
+The PM worker retries read-only network failures and HTTP 502/503/504 at most
+three times before invoking the Agent. Each attempt revalidates identity, signed
+rules and current automatic-reply permission. Failed preparation never sends a
+reply; permission failures, invalid responses and modified rules do not retry.
+Retained failed jobs still require explicit `watch retry` after repair. A healthy
+service or main-session probe is insufficient for acceptance: correlate a new
+message with its exact dispatch target, completed decision and send receipt,
+and independently verify the expected user-visible output on the owning host.
+
+With desktop notifications enabled and OS permission available, CLI 1.0.15
+also reminds the owner when PM prompt preparation remains failed. Notifications
+use the existing durable account queue, contain generic text only, and group the
+same unresolved conversation/cause. Polls and restarts do not repeat the same
+reminder; a new failure after recovery can notify again. Resolved failures are
+rechecked before display. Ordinary cancellation remains silent. This does not
+start the Agent, send private messages, overwrite local Skills or change an
+existing main-conversation target.
+
+## Reinspect after withdrawing an obsolete question
+
+Seller recovery may withdraw a waiting input request through
+`order withdraw-input-request ORDER_ID --expected-version VERSION --request-id REQUEST_ID`.
+The Commission service owns withdrawal authorization, request/version fencing,
+audit history and the seller wake-up. CLI 1.0.16 preserves the returned withdrawn
+request and lets the normal background input check determine readiness.
+An Order awaiting input must remain paused while necessary facts are missing.
+When existing inputs already satisfy the frozen contract, withdrawal permits
+fresh inspection without requiring a fabricated buyer answer. Read Order and
+journal state after the wake-up; queued inspection is distinct from acceptance.

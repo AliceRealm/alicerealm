@@ -1,0 +1,154 @@
+package cmd
+
+import (
+	"strings"
+	"sync"
+
+	"github.com/GardenVilla/alicerealm/cli/internal/auth"
+	"github.com/GardenVilla/alicerealm/cli/internal/client"
+	"github.com/GardenVilla/alicerealm/cli/internal/config"
+	"github.com/GardenVilla/alicerealm/cli/internal/output"
+)
+
+func newClient() *client.Client {
+	return newClientOptionalAuth(true)
+}
+
+func newClientNoAuth() *client.Client {
+	return newClientOptionalAuth(false)
+}
+
+func newClientOptionalAuth(requireAuth bool) *client.Client {
+	return newClientForServerOptionalAuth(serverFlag, requireAuth)
+}
+
+func newClientForServer(serverName string) *client.Client {
+	return newClientForServerOptionalAuth(serverName, true)
+}
+
+func newClientForServerOptionalAuth(serverName string, requireAuth bool) *client.Client {
+	return newClientForOrigin(serverName, requireAuth, false)
+}
+
+func newCommissionClient() *client.Client {
+	return newClientForOrigin(serverFlag, true, true)
+}
+
+func newClientForOrigin(serverName string, requireAuth, commission bool) *client.Client {
+	cfg, err := config.Load()
+	if err != nil {
+		output.Die(output.ExitUsageError, "load config: %v", err)
+	}
+	srv, err := cfg.GetActive(serverName)
+	if err != nil {
+		output.Die(output.ExitUsageError, "%v", err)
+	}
+	if requireAuth {
+		hasV2, v2Err := auth.HasV2Credentials(srv.Name)
+		if v2Err != nil {
+			exitCommandFailure(unavailableV2Identity(v2Err))
+			return nil
+		}
+		if hasV2 {
+			credentials, credentialErr := ensureV2Credentials(srv.Name, srv.Endpoint)
+			if credentialErr != nil {
+				exitCommandFailure(credentialErr)
+				return nil
+			}
+			baseURL := strings.TrimRight(srv.Endpoint, "/") + "/api/v2"
+			if commission {
+				baseURL, err = srv.CommissionBaseURL()
+				if err != nil {
+					output.Die(output.ExitUsageError, "%v; set it with 'alicerealm server update --name %s --commission-endpoint <url>'", err, srv.Name)
+				}
+				baseURL += "/api/v1"
+			}
+			result := client.New(baseURL, credentials.AccessToken, version, clientMetaForServer(srv))
+			result.OnSuccess = sync.OnceFunc(func() { clearFeedAuthBlock(srv.Name) })
+			result.OnUnauthorized = func() (string, error) {
+				refreshed, refreshErr := refreshV2CredentialsAfterUnauthorized(srv.Name, srv.Endpoint, result.Token)
+				if refreshErr != nil {
+					return "", refreshErr
+				}
+				return refreshed.AccessToken, nil
+			}
+			return result
+		}
+	}
+	return newLegacyClientForResolvedServer(srv, requireAuth, commission)
+}
+
+func newLegacyClientForServer(serverName string) *client.Client {
+	cfg, err := config.Load()
+	if err != nil {
+		output.Die(output.ExitUsageError, "load config: %v", err)
+	}
+	srv, err := cfg.GetActive(serverName)
+	if err != nil {
+		output.Die(output.ExitUsageError, "%v", err)
+	}
+	return newLegacyClientForResolvedServer(srv, true, false)
+}
+
+func newLegacyClientForResolvedServer(srv *config.Server, requireAuth, commission bool) *client.Client {
+	token := ""
+	if requireAuth {
+		creds, err := auth.LoadCredentials(srv.Name)
+		if err != nil {
+			output.Die(output.ExitAuthRequired, "not logged in to server %q — preserve this Agent Home; use ar-profile for existing-account recovery or ar-onboarding for an explicitly requested new connection", srv.Name)
+		}
+		if creds.IsExpired() {
+			output.Die(output.ExitAuthRequired, "token expired for server %q — preserve this Agent Home and use ar-profile for credential refresh or account recovery", srv.Name)
+		}
+		token = creds.AccessToken
+	}
+	baseURL := strings.TrimRight(srv.Endpoint, "/")
+	if commission {
+		commissionBaseURL, resolveErr := srv.CommissionBaseURL()
+		if resolveErr != nil {
+			output.Die(output.ExitUsageError, "%v; set it with 'alicerealm server update --name %s --commission-endpoint <url>'", resolveErr, srv.Name)
+		}
+		baseURL = commissionBaseURL
+	}
+	baseURL += "/api/v1"
+	c := client.New(baseURL, token, version, clientMetaForServer(srv))
+	if requireAuth {
+		serverName := srv.Name
+		c.OnSuccess = sync.OnceFunc(func() {
+			auth.RefreshExpiry(serverName)
+			clearFeedAuthBlock(serverName)
+		})
+	}
+	return c
+}
+
+func activeServerName() string {
+	cfg, err := config.Load()
+	if err != nil {
+		return ""
+	}
+	srv, err := cfg.GetActive(serverFlag)
+	if err != nil {
+		return ""
+	}
+	return srv.Name
+}
+
+// activeAgentScope returns a stable per-agent salt used to scope locally
+// generated idempotency tokens (e.g. feed event dedup_key). It prefers the
+// authenticated agent_id from saved credentials and falls back to the server
+// name so the token never collides across agents on different servers.
+func activeAgentScope() string {
+	srv := activeServerName()
+	if creds, err := auth.LoadV2Credentials(srv); err == nil && creds.AgentID != "" {
+		return creds.AgentID
+	}
+	if creds, err := auth.LoadCredentials(srv); err == nil && creds.AgentID != "" {
+		return srv + "\x00" + creds.AgentID
+	}
+	return srv
+}
+
+func resolveFormat() string {
+	return output.ResolveFormat(formatFlag)
+}

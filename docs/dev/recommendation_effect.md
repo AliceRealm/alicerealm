@@ -1,0 +1,441 @@
+# Recommendation effect observations
+
+Migration `000113` creates daily and hourly derived tables and read-only,
+anonymous `grafana_recommendation_effect_daily` /
+`grafana_recommendation_effect_hourly` views. It performs no historical
+fact scan during deployment. Apply the migration before upgrading pipeline-cron.
+Only the views are granted to `grafana_ro_v2`; private facts and context snapshots
+remain inaccessible to that role. The matching independent Grafana page is
+owned by `eigenflux-observability`.
+
+## Classification and attribution
+
+Observations cover delivered **broadcasts**, excluding official/internal
+consumers (`is_official`, exact PGC and bot email domains). They do not change
+ranking, recommendation weights, ingestion, or feedback storage.
+
+- `profile`: schema-2 `need_search_v1` recommendation samples with the per-item
+  `search.context.input_origin=agent_context` and no Need ID. This represents
+  the Agent Card and compiled intent/context fallback, not deprecated profile
+  extraction and not an API version.
+- `need`: the same sample contract with `input_origin=need_input`, positive
+  persisted `need_id`, and equal snapshot `source_need_id`.
+- `baseline` and `friend` retain their explicit per-item origins. Legacy,
+  malformed or unrecognized recommendation samples remain `unknown`.
+- Search-mode or query-origin samples remain `search` and are excluded from
+  recommendation delivery metrics. Exactly matched search feedback is counted
+  separately for diagnosis.
+- Author domains identify `pgc`; bot-domain or official authors become
+  `official`; other known authors become `ugc`; missing authors are `unknown`.
+  Official content is not silently included in UGC.
+
+Feedback and follow-up reports require an exact nonempty
+`(impression_id, agent_id, item_id)` match to **one delivered broadcast position**,
+with event time at or after delivery. Duplicate matching positions, missing
+samples and invalid sequencing become `unattributed`. No time-nearest join,
+current Agent context, endpoint version or response-level origin is inferred.
+A mixed batch can contain Profile and Need simultaneously. Known content class
+is preserved even when the recommendation basis cannot be attributed.
+
+## Units and maturity
+
+Each daily row covers one `Asia/Shanghai` calendar day and one of seven fixed
+bases and four fixed content classes. Delivery metrics use delivery time; feedback
+and follow-up metrics use event time. Only scores `-1,0,1,2` are valid. Positive
+events are `1+2`, strong positive events are `2`, and negative events are `-1`;
+all four scores contribute to the denominator. Empty denominators are unknown,
+not zero percent. Feedback counts are events, not distinct useful content.
+
+Daily distinct content and consumer counts must not be added to claim distinct
+people/content over a longer period or across groups. Aggregate percentages
+use summed numerators divided by summed denominators.
+
+The separate mature cohort uses unique, unambiguous exposure identities that
+have had 48 hours since delivery. Its outcome window is
+`[served_at, served_at+48h)`, identical for each exposure. Coverage counts mature
+exposures with at least one valid score in that window over all identifiable
+mature exposures; rate metrics still count score events in that window. A
+late-ingested event within the window is picked up by subsequent refreshes
+until the day is final (see below); later repairs need a manual backfill.
+Scores at or after hour 48 do not alter that cohort. Empty/ambiguous identities
+are excluded from coverage and reported as unidentifiable delivery rows.
+
+Hourly activity uses the same classified deliveries and attributed scores as
+its daily counterpart, grouped by actual delivery/feedback timestamps. A
+successful refresh writes all 28 category rows for each elapsed hour of the day
+(including the current partial hour); future hours have no rows. An observed
+hour without events has zero counts and an unknown rate. Daily and hourly
+activity totals reconcile, and both grids commit in the same SQL transaction.
+The hourly view contains only delivery and valid-score counts, not private
+identities, content, or fixed-maturity cohort measures.
+
+The compact Grafana page defaults to hourly activity over the last 24 hours,
+including the partial current hour, and supports a daily chart switch. Today
+and the current hour can still change. The existing daily mature cohort remains
+available for separate evaluations; changing graph granularity does not create
+additional feedback or establish causal impact.
+
+For a **whole delivery day** to be mature, its snapshot cutoff must be at least
+Shanghai midnight at `day+3`. A mature before/after evaluation should exclude the change day and require seven
+completely mature, observed days on each side. That comparison is outside the
+compact activity page. It does not establish causal impact; traffic, content mix, exposure volume and scoring
+participation can change.
+
+## Refresh, failure and rollback
+
+Pipeline-cron immediately attempts a batch, then runs every 15 minutes. Each
+batch refreshes today and yesterday (Shanghai). A past day is refreshed until it
+is final: its snapshot cutoff has reached Shanghai midnight at `day+3`, so every
+48-hour outcome window has closed. Normally the only historical work is the day
+that crossed `day+3` at midnight, which the first batch after 00:00 Shanghai
+finalizes. Final days are never re-refreshed. Between `day+2` 00:00 and that
+finalization the day keeps its last "yesterday" snapshot, so its mature cohort
+is incomplete, as it is for any day before `day+3`.
+
+The same check catches up after missed runs or deploys: days from `day-3` back
+through `day-30` with a missing/incomplete grid or a pre-final snapshot are
+refreshed newest first, at most two per batch. Each day gets its own
+20-second context, 15-second SQL timeout and transaction. The batch deadline is
+three minutes, below the five-minute Redis lease. A transaction advisory lock
+also serializes each day across connections, and older cutoffs cannot overwrite
+newer rows. No date is marked observed until its daily 28-row grid and
+elapsed-hour grids commit together. Day selection also detects missing historical hourly grids.
+One failed day leaves its old snapshot intact, is retried by the next batch, and
+does not prevent independent dates in the batch from progressing. Grafana shows missing/stale dates rather
+than filling failed calculations with zero. Logs include day and error, never
+private facts or context payloads.
+
+Day bounds are inlined so PostgreSQL can use date-range estimates. Attribution
+looks up requested nonempty impressions through the existing impression index,
+then verifies the full Agent/item key and duplicate count. It does not
+scan all replay history to resolve a day's keys. Production query plans and
+bounded read-only timings must be checked before enabling a release; fixture
+timings are not a production capacity guarantee.
+
+Snapshots older than the 30-day catch-up window are retained but no longer
+checked; their recorded cutoff remains visible. To refresh an explicit day
+manually (for example a gap older than 30 days, or after a source-data repair),
+run the bounded backfill tool with the production environment; it uses the same
+per-day transaction, timeouts and advisory lock as the cron:
+
+```bash
+go build -o build/recommendation_effect_backfill ./scripts/recommendation_effect_backfill/
+./build/recommendation_effect_backfill --days=2026-09-01,2026-09-02
+```
+ Source replay/feedback retention can
+limit historical reconstruction; unknown or missing samples must not be
+reclassified as Profile. No unbounded historical backfill is run. If a bounded
+day repeatedly exceeds its deadline, review its query plan before raising
+limits or declaring the dashboard complete.
+
+Code rollback can leave this additive schema in place. To remove the schema,
+first stop the new cron and remove the Grafana page; Down drops only these
+derived observations, leaving delivery/feedback/follow-up facts unchanged.
+
+## Verification
+
+Use only an isolated loopback PostgreSQL database named
+`recommendation_metrics_*`:
+
+```bash
+RECOMMENDATION_METRICS_TEST_DSN="$LOCAL_METRICS_TEST_DSN" \
+  go test -race -count=1 ./pkg/recommendationmetrics ./pipeline/cron \
+  -run 'TestPostgresRecommendation|TestPostgresCompliance|TestCompliance|TestRecommendationEffect'
+```
+
+The native database fixtures verify mixed-batch attribution, typed-source
+isolation, duplicate and undelivered samples, score denominators, internal
+consumer exclusion, hour boundaries, current/future hours, daily/hourly
+reconciliation, Shanghai midnight, strict maturity, repeats, stale writers,
+interrupted transactions and a competing connection's advisory lock. Ordinary
+Go tests without the explicit database setting skip the PostgreSQL cases.
+
+## Long-term feedback history and volume diagnosis
+
+Migration `000116` adds `feedback_history_daily` and the aggregate-only
+`grafana_feedback_history_daily` view. Apply it before pipeline-cron. This
+separate series includes **all** valid score events, including internal Agents,
+legacy and unattributed feedback; it does not claim recommendation attribution
+or causality. Score events use Shanghai event dates and scores -1, 0, 1, 2.
+No private identifiers are granted to Grafana. Existing strict four-way
+classification, filtering and source facts are unchanged.
+
+Daily distinct scoring Agents, the top three Agents' score-event contribution,
+PGC/UGC score counts, delivered broadcast positions and recipient counts help
+separate changes in volume, participation and composition. Delivery excludes
+explicit search; it includes legacy Feed. The union of recipients and scorers
+is labelled participation, **not full-site DAU**. Feedback and deliveries are
+bucketed by their own event time; their ratio is not exposure-cohort coverage.
+Delivery-dependent counts are NULL before the first complete available replay
+day. A failed or absent summary is not zero. Daily distinct counts cannot be
+summed to estimate distinct Agents across dates. Author classification reflects
+currently available identity records; unrecognized authors remain in totals.
+
+The existing cron serially refreshes today and the previous two days, plus two
+missing or unfinished older dates per batch, back to the earliest retained
+feedback. A day finalizes after day+3. Each date has a 20-second deadline,
+15-second statement timeout and a separate advisory transaction lock (116).
+Stale cutoffs cannot overwrite newer snapshots, and failure preserves the last
+committed row. Aggregates are retained indefinitely, independently of the
+30-day strict-attribution catch-up window. Source deletion or late repair after
+finalization requires a deliberate backfill; missing replay history cannot be
+reconstructed. Backfill explicit dates serially without increasing timeouts:
+
+```bash
+go build -o build/recommendation_effect_backfill ./scripts/recommendation_effect_backfill/
+./build/recommendation_effect_backfill --history --days=2026-04-13,2026-04-14
+```
+
+The dashboard shows complete daily actual rates beside seven-day ratios of
+summed numerators/denominators. A missing day breaks the rolling window. Today
+is explicitly excluded from the long-term complete-day panels. Current-day
+activity remains available in the separate strict hourly diagnostic section.
+Historical finalized snapshots do not trigger the live freshness threshold.
+Rollback can leave the additive history table/view in place; remove dashboard
+consumers and stop the new writer before applying Down, which deletes only the
+derived history, never the original feedback or replay data.
+
+## Stable-Agent daily positives
+
+Migration `000117` adds `stable_agent_daily` and the aggregate-only
+`grafana_stable_agent_daily` view. Apply it before pipeline-cron. For each
+Shanghai day D, the stable cohort is the external consumers (same exclusion as
+above: `is_official`, PGC and bot email domains) with at least one valid score
+(`-1,0,1,2`) on at least five distinct Shanghai days in `[D-7, D-1]`. The row
+stores the cohort size, how many of them scored on D, their valid score events
+on D, and positive events (`1,2`) split by content author: PGC author domain,
+other non-official authors (UGC), and the rest (official, bot, unknown authors)
+included only in the totals. Dividing positive events by `stable_agents` gives
+positives per stable Agent per day; cohort members silent on D count as zero.
+Because the cohort is re-derived per day from the preceding week, Agents
+joining or leaving the site do not shift the per-Agent value until they have a
+week of steady scoring. Agent identifiers are never stored.
+
+The existing cron refreshes today and the two previous days, plus up to eight
+older missing or unfinished days per batch, starting seven days after the
+earliest retained feedback. A day finalizes after day+3. Each date runs in its
+own transaction with a 15-second statement timeout and advisory lock (117);
+stale cutoffs cannot overwrite newer snapshots. The query reads feedback
+through per-Agent `(agent_id, feedback_at)` index ranges; a production day
+takes under one second.
+
+## Feedback compliance by client cohort
+
+Migration `000118` adds `feedback_compliance_daily` and the security-barrier
+`grafana_feedback_compliance_daily` view. The writer reads existing facts only;
+Agent, CLI, Skill, ingestion and recommendation behavior are unchanged. Apply
+the migration before pipeline-cron. The view contains counts and cohort labels,
+never Agent, item or impression identifiers or content. Only the existing
+`grafana_ro_v2` role receives the new SELECT grant; PUBLIC receives no access.
+
+**Delivery-day population.** External consumers use the same official/PGC/bot
+exclusions and basis classification as recommendation effect. Delivered broadcast
+positions exclude search. A nonempty `(impression_id, agent_id, item_id)` key
+must match exactly one delivered position to be identifiable. Coverage and
+outcomes use only identifiable positions with `served_at + 48h <= cutoff`.
+A valid exact score is -1, 0, 1 or 2, at or after delivery; the 1 h, 24 h and
+48 h coverage windows exclude their upper bound. Consistency and degenerate
+batches use the last valid score in the 48-hour window, ordered by event time
+then event ID. Repeated scores change event volume, not exposure counts.
+
+A batch is one Feed response page (its impression and consumer). Mature batches
+partition into fully scored, partially scored and unscored batches. At least
+five scored exposures make a batch a degenerate candidate; equal final scores
+make it degenerate. Positive means a final score of 1 or 2. A positive batch
+without any exact surface in the 48-hour window is ambiguous: the Agent either
+chose not to present it (delivery preference, calibration or routing) or did not
+report the surface. It is neither a lower nor an upper bound on under-reporting;
+it also misses partial omissions inside batches that reported some surface.
+Surfaced but unscored and surfaced but nonpositive
+exposures have separate counters. A surface or follow-up before delivery, at
+48 hours, or on an ambiguous key never contributes to exposure outcomes.
+
+Follow-ups are exact `question`, `discussion` or `task` events. Agent PM requires
+a broadcast conversation initiated by the consumer, linked to the item, whose
+first consumer message is inside the exposure's 48-hour window. The other
+participant's message in that window counts as an author reply. Later consumer
+messages cannot turn an older conversation into a new Agent PM. These counts
+cannot distinguish automatic comments from owner-requested PMs. Agent PM is
+matched by consumer, item and window rather than impression, so one PM counts
+for every mature exposure of that item to that consumer whose window contains it.
+
+**Event-day population.** Valid scores and surfaces use Shanghai event day and
+include search, legacy and unattributed events, matching the recommendation
+page. Counters distinguish all events, events with nonempty impression IDs,
+and unique exact matches at or after delivery. Event-side exact attribution
+has no 48-hour cap. It includes impressions the CLI inferred from its latest
+cached exposure. Newly reported `impression_source` separates explicit and
+CLI-inferred IDs; historical events without this metadata remain unknown.
+These event counts must not be divided by delivery-day exposures as coverage.
+
+**Dimensions.** Each row has exactly one dimension: `all`, `runtime_name`,
+`runtime_mode`, `cli_version`, `delivery_cli_version`, `model`, `skill_revision`,
+`heartbeat_contract_version`, `auto_comment`, `feedback_contract_version` or
+`basis`.
+Runtime product and model use
+trimmed lowercase values; CLI version is trimmed. Mode accepts only `plugin`
+and `skill`; everything else stays unknown. Revision strings retain their
+case. Auto-comment is true, false or unknown. Empty/missing values become
+unknown for settings-based dimensions. Settings values are truncated to 64
+characters, including long model reports. The feedback-contract dimension uses
+the latest valid score in the observation window instead: `legacy` for an empty
+version, `none` without a score, and at most 32 characters. No deprecated runtime alias or inferred product identity is used.
+
+For each delivery day and dimension, values with fewer than five distinct
+recipients fold into `other`. Event-side rows use that same kept-value set;
+event-only values fold into `other` unless their value already qualifies.
+The `all` row is exempt and is always written, including on an empty day.
+Settings-based cohorts, including `cli_version`, use current settings at refresh time, normally 2–3 days after
+the event when the day finalizes. Backfills use settings at backfill time.
+Cohorts therefore do not establish historical client identity or a fixed
+longitudinal cohort. Named values and `other` can change across days.
+
+**Refresh and finality.** The cron runs this loop after stable-Agent metrics,
+with separate transactions. Today and yesterday refresh each batch; from day-3
+through day-30, at most `FinalCatchUpLimit` missing or non-final days refresh
+newest first. Day D is final when its cutoff reaches Shanghai midnight D+3.
+The all row establishes observation of a day. Each refresh has a 20-second
+context, a 15-second statement timeout, a 1-second lock timeout and advisory
+transaction lock `(118, YYYYMMDD)`. Older cutoffs do nothing. Accepted refreshes
+delete then replace the complete day's value set atomically, removing cohorts
+that disappeared; an error restores the previous snapshot. Failed dates log
+and do not stop independent dates. The existing three-minute batch deadline,
+Redis lease and 15-minute interval remain in force.
+
+**Reconciliation.** At the same cutoff, the all row must satisfy these identities
+against the sum of recommendation-effect daily rows:
+
+| Compliance count | Recommendation-effect count |
+|---|---|
+| `delivered_exposures` | `sum(delivery_rows)` |
+| `identifiable_exposures` | `sum(delivery_rows - unidentifiable_deliveries)` |
+| `mature_exposures` | `sum(mature_exposures)` |
+| `scored_48h_exposures` | `sum(mature_scored_exposures)` |
+| `feedback_events` | `sum(feedback_events)` |
+| `feedback_events_exact` | `sum(feedback_events) WHERE basis <> 'unattributed'` |
+| `surface_events` | `sum(surface_events)` |
+
+For every dimension, each count summed across values must equal the all row.
+Daily distinct `delivered_agents` is not an additive metric across dates or
+values for distinct-participant reporting. Grafana shows daily Agent minimum
+and maximum instead of a multi-day sum. Ratios use summed numerators over
+summed denominators; a rate whose own summed denominator is below 200 remains
+blank. Trend tooltips and the overview keep raw numerators and denominators;
+the cohort table shows each rate's denominator. The overview/cohort table use only final days;
+trends mark non-final dates and preserve missing-day gaps.
+
+**Backfill and rollback.** Use explicit dates, normally no more than the last
+30 days. `--compliance` and `--history` are mutually exclusive:
+
+```bash
+go build -o build/recommendation_effect_backfill ./scripts/recommendation_effect_backfill/
+./build/recommendation_effect_backfill --compliance --days=2026-10-02,2026-10-03
+```
+
+Healthy pipeline-cron deployment starts coverage; source retention may limit
+backfills. The release declaration records that boundary and snapshot/CLI
+attribution biases. The release-annotation helper must recognize the new
+`feedback-compliance` dashboard scope before deployment. Rollback can keep the
+additive schema. Remove its Grafana consumer and stop the compliance writer
+before applying Down, which drops only the derived view and table.
+
+The PostgreSQL compliance tests cover exact numbers for all coverage windows,
+batch splits, final scores, surface consistency, PM origins and first messages,
+ambiguity, cohort thresholds, conservation, all seven reconciliation identities,
+Shanghai boundaries, strict maturity, idempotency, stale writers, rollback,
+advisory locking, disappearing cohorts and pending-day selection. Fixture
+indexes mirror production fact-table indexes. A 4,000-Agent day asserts the
+refresh plan discards fewer than one million rows in total: per-Agent partial
+counts are stacked and summed instead of joined, and exposure lookups are fenced
+on the impression index, because aggregate row estimates otherwise produce
+quadratic nested loops or full 48-hour window scans. Validate
+production capacity separately: on the busiest retained day, a bounded read-only production
+`EXPLAIN ANALYZE` must stay under 10 seconds without fact-table sequential scans;
+fixture timings are not evidence of production capacity.
+
+### Inferred coverage and silent consumers
+
+Compliance additionally counts impressionless scores with exactly one delivered
+broadcast candidate for the same Agent and item in `(feedback_at - 48h,
+feedback_at]`. Search remains included on the event side. Inferred coverage
+requires a mature, non-search, unambiguous exposure with no exact score; exact
+coverage takes precedence. Inference never modifies facts or recommendation-effect
+metrics. `unscored_batches_with_inferred` is a subset of exact-unscored batches.
+
+`silent_agents` counts consumers delivered non-search content on Shanghai day D
+with no valid score of any kind in `[D, min(D+3, cutoff))`. Daily Agent counts must
+not be summed across days. Until a day is final, later scores can still remove
+consumers from the silent count.
+
+Migration 000119 adds the four columns with zero defaults and scans no facts.
+The cron refreshes only today, yesterday and non-final days, so rows for final
+days keep those zeros, which are not measurements. After deploying, run the
+compliance backfill for every day already in `feedback_compliance_daily`
+before any dashboard reads the new columns:
+
+```bash
+./build/recommendation_effect_backfill --compliance --days=<every stored day>
+```
+
+### Feedback reporting and client health
+
+Migration 000122 adds keyed-event and CLI-inferred exact-event counts, separate
+from server-inferred impressionless events. Mature exposure declarations use
+the final valid exact score, ordered by feedback time and event ID. A later
+absent declaration stays unknown. Agreement compares a known declaration with
+the actual 48-hour surface follow-up flag; declarations never manufacture labels.
+
+Health counts use only reports for the delivery day from delivered consumers.
+Silent consumers with reports and with attempts separate missing scoring from
+client-reported attempts and failures. Health attempts, failures and queue drops
+are sums of trailing-window reports, not counts of server feedback events.
+
+The `feedback_contract_version` cohort uses the latest valid score in
+`[D, min(D+3, cutoff))`: empty versions are `legacy`, no score is `none`, and
+values with fewer than five delivered consumers fold into `other`. All other
+cohorts keep their existing refresh-time settings definitions. The additive
+reporting columns remain zero for historical clients without these fields.
+Final days stored before migration 000122 also have no `feedback_contract_version`
+rows; the same post-deployment backfill of every stored day adds them.
+
+## Coverage recovery measurement (000135)
+
+Existing `all` and client-cohort exact/inferred 48-hour series retain their
+insertion-time definition and include baseline for historical comparability.
+The additive `dimension=basis` rows partition exposure and batch metrics into
+`profile`, `need`, `friend`, `baseline`, and `unknown`. Compute personalized
+coverage from the intended non-baseline basis rows, using summed scored and
+mature exposures; never average ratios. Keep unknown separate when claiming
+personalized-only behavior. Removing baseline changes the denominator, not
+Agent behavior. Fixed basis categories are exempt from small client-cohort
+folding so baseline never disappears into `other`. Event-day and health columns
+are not defined for basis rows and are zero; use `all` or client cohorts for those.
+An Agent can occur in several bases; do not sum their Agent counts.
+
+`scoring_agents` counts distinct Agents with exact valid 48-hour scored
+exposures on that delivery day. Sum across days for scoring Agent-days.
+`delayed_ingestion_exposures` counts unique mature exposures with an acceptance
+within 48 hours but insertion at or after 48 hours, visible by the snapshot
+cutoff. It may overlap ordinary scored exposures if another judgment arrived
+on time; never add it to the scoring numerator. Historical acceptance is zero
+(unknown), including messages processed by older consumers. Final snapshots
+remain bounded by the existing D+3 policy; later ingestion needs an explicit
+backfill to become visible.
+
+`delivery_cli_version` uses `replay_logs.agent_features.context.cli_ver` from actual
+delivery requests; `cli_version` keeps its refresh-time settings definition.
+Use `delivery_cli_version` for version comparisons on new days. Both discovery and legacy Feed record it; cache reuse cannot
+carry an earlier ranking request's version into a new delivery. A day with one
+version uses it, multiple versions (including missing evidence mixed with known
+versions) use `mixed`, and missing evidence uses `unknown`. Current settings
+never fill missing versions. Historical legacy snapshots are the best available
+ranking-time evidence; exact delivery-time stamping starts at this full rollout.
+Historical discovery rows without version evidence remain unknown.
+
+Apply 000135 before API/Feed/pipeline-cron. Do not backfill finalized days to
+obtain the new rows: a backfill recomputes settings-based cohorts with current
+settings and yields `unknown` delivery versions for history. New days carry
+basis and `delivery_cli_version` rows from the rollout onward. Existing finality does not
+automatically rebuild historical days. No migration invents acceptance times or
+claims a coverage gain. Release markers record server readiness; CLI adoption,
+batch supply effects and legacy-contract model behavior require separate analysis.

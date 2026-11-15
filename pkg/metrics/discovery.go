@@ -1,0 +1,24 @@
+package metrics
+
+import "github.com/prometheus/client_golang/prometheus"
+
+// Labels contain bounded modes, source kinds and evaluator reason codes only.
+var (
+	DiscoveryNeedDenseDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "discovery_need_dense_duration_seconds", Help: "Captured-Need dense recall latency, including failed reads and excluding history loading.", Buckets: []float64{.005, .01, .025, .05, .1, .2, .3, .5, 1, 2.5, 5}}, []string{"lane", "exclusion"})
+	DiscoveryHydrateDuration   = prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "discovery_hydrate_duration_seconds", Help: "Discovery source hydration latency, including failed reads.", Buckets: []float64{.005, .01, .025, .05, .1, .2, .3, .5, 1, 2.5, 5}}, []string{"mode"})
+	DiscoveryRefill            = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "discovery_consumed_refill_total", Help: "Bounded consumed-candidate refill outcomes."}, []string{"outcome"})
+	DiscoveryLRScoring         = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "discovery_lr_scoring_total", Help: "Discovery LR candidate batches by outcome."}, []string{"result"})
+	DiscoveryLRReload          = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "discovery_lr_reload_total", Help: "Discovery LR local model load outcomes."}, []string{"result"})
+	DiscoveryContextCache      = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "discovery_context_cache_total", Help: "Discovery input and compiled-value cache outcomes."}, []string{"scope", "outcome"})
+	DiscoveryNeedEmbedding     = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "discovery_need_embedding_total", Help: "Need vector cache and precomputation outcomes."}, []string{"operation", "outcome"})
+	DiscoveryRecordingFailures = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "discovery_recording_failures_total", Help: "Failed best-effort discovery history, consumption or sample writes."}, []string{"stage"})
+	DiscoveryDuration          = prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "discovery_execution_seconds", Help: "Discovery execution latency by result status.", Buckets: prometheus.DefBuckets}, []string{"mode", "status"})
+	DiscoveryRejected          = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "discovery_rejected_total", Help: "Rejected hydrated discovery candidates."}, []string{"kind", "reason"})
+	DiscoveryChannelFailures   = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "discovery_channel_failures_total", Help: "Failed optional recall channels."}, []string{"kind", "channel"})
+	DiscoveryFallback          = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "discovery_fallback_total", Help: "Explicit automatic context fallbacks."}, []string{"reason"})
+)
+
+func init() {
+	Registry.MustRegister(DiscoveryNeedDenseDuration, DiscoveryHydrateDuration, DiscoveryLRScoring, DiscoveryLRReload, DiscoveryRefill)
+	Registry.MustRegister(DiscoveryContextCache, DiscoveryNeedEmbedding, DiscoveryRecordingFailures, DiscoveryDuration, DiscoveryRejected, DiscoveryChannelFailures, DiscoveryFallback)
+}

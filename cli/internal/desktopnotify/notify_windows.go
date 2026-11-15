@@ -1,0 +1,71 @@
+package desktopnotify
+
+import (
+	"bytes"
+	"context"
+	_ "embed"
+	"encoding/json"
+	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"syscall"
+	"time"
+
+	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
+)
+
+//go:embed windows.ps1
+var windowsScript string
+
+//go:embed macos/Icon.png
+var windowsIconPNG []byte
+
+func platformRequest(ctx context.Context, action string, message Message) error {
+	if action == "prepare" {
+		action = "enable"
+	} // Registration is silent on Windows.
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	executable, err = selfupdate.InstallationRoot(executable)
+	if err != nil {
+		return err
+	}
+	xml, tag, err := windowsToast(message)
+	if err != nil {
+		return err
+	}
+	var iconPNG []byte
+	if action == "enable" {
+		iconPNG = windowsIconPNG
+	}
+	input, err := json.Marshal(struct {
+		Action     string `json:"action"`
+		Executable string `json:"executable"`
+		XML        string `json:"xml"`
+		Tag        string `json:"tag"`
+		IconPNG    []byte `json:"icon_png,omitempty"`
+	}{action, executable, xml, tag, iconPNG})
+	if err != nil {
+		return err
+	}
+	// Use the OS Windows PowerShell, not a PATH-supplied executable. All data goes
+	// through stdin; the script is static and execution policy is never changed.
+	root := os.Getenv("SystemRoot")
+	if root == "" {
+		return errors.New("Windows SystemRoot is unavailable")
+	}
+	powershell := filepath.Join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+	command := exec.CommandContext(ctx, powershell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", windowsScript)
+	command.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+	command.Stdin = bytes.NewReader(input)
+	output, err := command.Output()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return windowsHelperResult(output, err)
+}

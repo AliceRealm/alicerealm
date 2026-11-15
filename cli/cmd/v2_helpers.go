@@ -1,0 +1,253 @@
+package cmd
+
+import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/GardenVilla/alicerealm/cli/internal/auth"
+	"github.com/GardenVilla/alicerealm/cli/internal/cache"
+	"github.com/GardenVilla/alicerealm/cli/internal/client"
+	"github.com/GardenVilla/alicerealm/cli/internal/config"
+	"github.com/GardenVilla/alicerealm/cli/internal/controlcontext"
+	"github.com/GardenVilla/alicerealm/cli/internal/profilestate"
+)
+
+func newBrowserNonce() (string, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+func newV2ClientForServer(serverName string, requireAuth bool) (*client.Client, *config.Server, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, nil, err
+	}
+	server, err := cfg.GetActive(serverName)
+	if err != nil {
+		return nil, nil, err
+	}
+	token := ""
+	if requireAuth {
+		credentials, credentialErr := ensureV2Credentials(server.Name, server.Endpoint)
+		if credentialErr != nil {
+			return nil, nil, credentialErr
+		}
+		token = credentials.AccessToken
+	}
+	result := client.New(strings.TrimRight(server.Endpoint, "/")+"/api/v2", token, version, clientMetaForServer(server))
+	if requireAuth {
+		result.OnSuccess = sync.OnceFunc(func() { clearFeedAuthBlock(server.Name) })
+		result.OnUnauthorized = func() (string, error) {
+			refreshed, refreshErr := refreshV2CredentialsAfterUnauthorized(server.Name, server.Endpoint, result.Token)
+			if refreshErr != nil {
+				return "", refreshErr
+			}
+			return refreshed.AccessToken, nil
+		}
+	}
+	return result, server, nil
+}
+
+func ensureV2Credentials(serverName, endpoint string) (*auth.V2Credentials, error) {
+	return refreshV2Credentials(serverName, endpoint, false)
+}
+
+func refreshV2Credentials(serverName, endpoint string, force bool) (*auth.V2Credentials, error) {
+	return refreshV2CredentialsForToken(serverName, endpoint, force, "")
+}
+
+func refreshV2CredentialsAfterUnauthorized(serverName, endpoint, rejectedAccessToken string) (*auth.V2Credentials, error) {
+	return refreshV2CredentialsForToken(serverName, endpoint, true, rejectedAccessToken)
+}
+
+func refreshV2CredentialsForToken(serverName, endpoint string, force bool, rejectedAccessToken string) (*auth.V2Credentials, error) {
+	// Valid credentials need no cross-process coordination or lock-file access.
+	if !force {
+		credentials, err := auth.LoadV2Credentials(serverName)
+		if err != nil {
+			return nil, wrapV2CredentialError(unavailableV2Identity(fmt.Errorf("cannot read Agent V2 credentials for server %q: %w", serverName, err)))
+		}
+		if credentials.ExpiresAt > time.Now().Add(30*time.Second).UnixMilli() {
+			return credentials, nil
+		}
+	}
+	var credentials *auth.V2Credentials
+	err := auth.WithV2CredentialsLock(serverName, 35*time.Second, func() error {
+		var refreshErr error
+		credentials, refreshErr = ensureV2CredentialsUnlocked(serverName, endpoint, force, rejectedAccessToken)
+		return refreshErr
+	})
+	return credentials, wrapV2CredentialError(err)
+}
+
+func ensureV2CredentialsUnlocked(serverName, endpoint string, force bool, rejectedAccessToken string) (*auth.V2Credentials, error) {
+	return ensureV2CredentialsUnlockedWithGuardForToken(serverName, endpoint, force, rejectedAccessToken, nil, nil)
+}
+
+// A pinned background consumer validates identity both under the refresh lock
+// and before persisting a refresh or same-account recovery response.
+func ensureV2CredentialsUnlockedWithGuard(serverName, endpoint string, force bool, guard func(*auth.V2Credentials) error, configure func(*client.Client)) (*auth.V2Credentials, error) {
+	return ensureV2CredentialsUnlockedWithGuardForToken(serverName, endpoint, force, "", guard, configure)
+}
+
+func ensureV2CredentialsUnlockedWithGuardForToken(serverName, endpoint string, force bool, rejectedAccessToken string, guard func(*auth.V2Credentials) error, configure func(*client.Client)) (*auth.V2Credentials, error) {
+	credentials, err := auth.LoadV2Credentials(serverName)
+	if err != nil {
+		return nil, unavailableV2Identity(fmt.Errorf("cannot read Agent V2 credentials for server %q: %w", serverName, err))
+	}
+	if guard != nil {
+		if err := guard(credentials); err != nil {
+			return nil, err
+		}
+	}
+	if (!force || (rejectedAccessToken != "" && credentials.AccessToken != rejectedAccessToken)) && credentials.ExpiresAt > time.Now().Add(30*time.Second).UnixMilli() {
+		return credentials, nil
+	}
+	publicKey, privateKey, err := auth.LoadIdentity(serverName)
+	if err != nil {
+		return nil, unavailableV2Identity(fmt.Errorf("cannot read the existing Agent identity for server %q: %w", serverName, err))
+	}
+	unauthenticated := client.New(strings.TrimRight(endpoint, "/")+"/api/v2", "", version, clientMetaForServerName(serverName))
+	if configure != nil {
+		configure(unauthenticated)
+	}
+	beforeSave := func(candidate *auth.V2Credentials) error {
+		if guard == nil {
+			return nil
+		}
+		if err := guard(candidate); err != nil {
+			return err
+		}
+		current, err := auth.LoadV2Credentials(serverName)
+		if err != nil {
+			return err
+		}
+		return guard(current)
+	}
+	challengeResponse, err := unauthenticated.Post("/agent-sessions/refresh-challenges", map[string]interface{}{
+		"refresh_token": credentials.RefreshToken, "rotation_request_id": refreshRotationRequestID(credentials.RefreshToken),
+	})
+	if err != nil {
+		if isExpiredV2Refresh(err) {
+			return recoverExpiredV2Credentials(serverName, unauthenticated, credentials, publicKey, privateKey, beforeSave)
+		}
+		return nil, err
+	}
+	var challenge struct {
+		Nonce    string `json:"nonce"`
+		IssuedAt int64  `json:"issued_at"`
+	}
+	if json.Unmarshal(challengeResponse.Data, &challenge) != nil || challenge.Nonce == "" {
+		return nil, fmt.Errorf("invalid Agent V2 refresh challenge")
+	}
+	request := refreshV2Request{
+		RefreshToken:      credentials.RefreshToken,
+		RotationRequestID: refreshRotationRequestID(credentials.RefreshToken),
+		Nonce:             challenge.Nonce,
+		PublicKey:         base64.RawURLEncoding.EncodeToString(publicKey),
+		IssuedAt:          challenge.IssuedAt,
+	}
+	transcript, err := refreshV2Transcript(request)
+	if err != nil {
+		return nil, err
+	}
+	request.Signature = base64.RawURLEncoding.EncodeToString(ed25519.Sign(privateKey, transcript))
+	refreshResponse, err := unauthenticated.Post("/agent-sessions/refresh", request)
+	if err != nil {
+		if isExpiredV2Refresh(err) {
+			return recoverExpiredV2Credentials(serverName, unauthenticated, credentials, publicKey, privateKey, beforeSave)
+		}
+		return nil, err
+	}
+	var refreshed struct {
+		AgentID      string   `json:"agent_id"`
+		PrincipalID  string   `json:"principal_id"`
+		AccessToken  string   `json:"access_token"`
+		RefreshToken string   `json:"refresh_token"`
+		ExpiresAt    int64    `json:"expires_at"`
+		Scopes       []string `json:"scopes"`
+	}
+	if json.Unmarshal(refreshResponse.Data, &refreshed) != nil || refreshed.AgentID == "" || refreshed.AccessToken == "" || refreshed.RefreshToken == "" {
+		return nil, fmt.Errorf("invalid Agent V2 refresh response")
+	}
+	if guard != nil {
+		candidate := *credentials
+		candidate.AgentID, candidate.PrincipalID = refreshed.AgentID, refreshed.PrincipalID
+		if err := beforeSave(&candidate); err != nil {
+			return nil, err
+		}
+	}
+	oldAgentID := credentials.AgentID
+	credentials.AccessToken = refreshed.AccessToken
+	credentials.RefreshToken = refreshed.RefreshToken
+	credentials.AgentID = refreshed.AgentID
+	credentials.PrincipalID = refreshed.PrincipalID
+	credentials.ExpiresAt = refreshed.ExpiresAt
+	credentials.Scopes = refreshed.Scopes
+	if err := auth.SaveV2Credentials(serverName, credentials); err != nil {
+		return nil, err
+	}
+	if oldAgentID != "" && oldAgentID != refreshed.AgentID {
+		if err := cache.DeleteIdentityScopedData(serverName); err != nil {
+			return nil, fmt.Errorf("clear previous Agent local data: %w", err)
+		}
+		if err := controlcontext.Delete(serverName); err != nil {
+			return nil, fmt.Errorf("clear previous Agent control context: %w", err)
+		}
+		if err := profilestate.Delete(config.HomeDir(), serverName, oldAgentID); err != nil {
+			return nil, fmt.Errorf("clear previous Agent profile state: %w", err)
+		}
+	}
+	return credentials, nil
+}
+
+type refreshV2Request struct {
+	RefreshToken      string `json:"refresh_token"`
+	RotationRequestID string `json:"rotation_request_id"`
+	Nonce             string `json:"nonce"`
+	PublicKey         string `json:"public_key"`
+	IssuedAt          int64  `json:"issued_at"`
+	Signature         string `json:"signature"`
+}
+
+type refreshV2Proof struct {
+	RefreshToken      string `json:"refresh_token"`
+	RotationRequestID string `json:"rotation_request_id"`
+	Nonce             string `json:"nonce"`
+	PublicKey         string `json:"public_key"`
+	IssuedAt          int64  `json:"issued_at"`
+}
+
+func refreshV2Transcript(request refreshV2Request) ([]byte, error) {
+	payload, err := json.Marshal(refreshV2Proof{
+		RefreshToken: request.RefreshToken, RotationRequestID: request.RotationRequestID, Nonce: request.Nonce,
+		PublicKey: request.PublicKey, IssuedAt: request.IssuedAt,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return []byte(fmt.Sprintf("EF-AUTH-V2-REFRESH\x00POST\n/api/v2/agent-sessions/refresh\n%s", sha256HexCLI(payload))), nil
+}
+
+func refreshRotationRequestID(refreshToken string) string {
+	digest := sha256.Sum256([]byte("alicerealm-refresh-v2\x00" + refreshToken))
+	return fmt.Sprintf("refresh-%x", digest)
+}
+
+func sha256HexCLI(value []byte) string {
+	return fmt.Sprintf("%x", sha256Sum(value))
+}
+
+func sha256Sum(value []byte) [32]byte {
+	return sha256.Sum256(value)
+}

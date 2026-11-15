@@ -1,0 +1,336 @@
+[
+  {
+    "id": "discovery-consumed-refill-v1",
+    "kind": "behavior",
+    "deploy_scope": "full",
+    "dashboards": [
+      "recommendation-effect"
+    ],
+    "title": "Empty-page consumed-candidate recovery available",
+    "description": "Default off; enabled Agent buckets can recover matching candidates only when the current recommendation page is empty. Nonempty pages keep their original candidates. Deployment does not activate recovery. Compare fixed-cohort daily positives after a recorded bucket activation.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/415"
+  },
+  {
+    "id": "install-preview-entry-coverage-v1",
+    "kind": "instrumentation",
+    "deploy_scope": "api",
+    "dashboards": [
+      "user-growth"
+    ],
+    "title": "补齐网页与指引预加载识别记录",
+    "description": "新增记录从API健康部署后生效；看板可查保留期内的网页自动请求。历史落地无完整UA证据，不作真人回填；安装补报仍依赖新版CLI，未合并为同一计数单位。",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/416"
+  },
+  {
+    "id": "legacy-email-registration-retired-v1",
+    "kind": "behavior",
+    "deploy_scope": "full",
+    "dashboards": [
+      "user-growth"
+    ],
+    "title": "Legacy email registration retired",
+    "description": "Unknown emails can no longer create Agents through legacy login after the Auth RPC rollout. Existing legacy login remains available. New registrations must use V2 onboarding; corrected CLI guidance takes effect only after clients upgrade.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/427"
+  },
+  {
+    "id": "agent-v2-sliding-renewal-v1",
+    "kind": "behavior",
+    "deploy_scope": "api",
+    "dashboards": [
+      "card-refresh",
+      "auto-publish"
+    ],
+    "title": "Keep active Agent sessions renewable",
+    "description": "Successful refresh rotations advance a rolling 30-day window after API deployment. Same-account expiry recovery and persistent stream renewal require CLI 0.6.7; host notifications and Skills adopt separately. Historical failed checks are not backfilled.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/428"
+  },
+  {
+    "id": "business-access-rejection-reasons-v1",
+    "kind": "instrumentation",
+    "deploy_scope": "api",
+    "dashboards": [
+      "card-refresh"
+    ],
+    "title": "Classify business access rejections",
+    "description": "Sanitized business access rejection reasons start after API deployment; historical failures are not backfilled. Skipping expired profile/Feed telemetry requires an updated CLI and does not change backend access rules.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/437"
+  },
+  {
+    "id": "feedback-compliance-baseline-v1",
+    "kind": "instrumentation",
+    "deploy_scope": "full",
+    "dashboards": [
+      "feedback-compliance"
+    ],
+    "title": "Feedback compliance baseline by client cohort",
+    "description": "Rows start at healthy pipeline-cron deployment, with at most 30 days backfilled. Cohorts use the refresh-time settings snapshot. Event-side exact attribution includes impressions the CLI filled from its latest cached exposure; explicit and inferred impressions cannot yet be separated.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/439"
+  },
+  {
+    "id": "feedback-compliance-inferred-v1",
+    "kind": "instrumentation",
+    "deploy_scope": "full",
+    "dashboards": [
+      "feedback-compliance"
+    ],
+    "title": "Measure legacy scoring and silent consumers",
+    "description": "Separate inferred coverage starts after pipeline-cron deployment and bounded backfill of retained facts. Exact metrics remain unchanged. Client cohorts use refresh-time settings; silent consumer shares are daily, not cumulative.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/441"
+  },
+  {
+    "id": "feedback-compliance-reporting-v1",
+    "kind": "instrumentation",
+    "deploy_scope": "full",
+    "dashboards": [
+      "feedback-compliance"
+    ],
+    "title": "Measure feedback declarations and client health",
+    "description": "Reporting counts start after schema and pipeline-cron rollout; existing client history remains zero for fields it never reported. New client adoption is separate. Surface declarations remain distinct from observed follow-ups, and health shares use daily delivered consumers.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/443"
+  },
+  {
+    "id": "discovery-need-budget-v1",
+    "kind": "behavior",
+    "deploy_scope": "full",
+    "dashboards": [
+      "recommendation-effect"
+    ],
+    "title": "Preserve Need candidates and soft-quota equal-priority Needs",
+    "description": "Need budget, attribution and the need_mix soft quota default off; compare arms recorded in replay_logs.agent_features.experiments by Need count, starting from bucket activation, not deployment time; rows before this release carry no arm. Scores are unchanged, while snapshot and page allocation across Needs can change. Global Swing recall and page ceilings activate separately for all Agents. Hydration timing starts only after the full Sort rollout; historical latency is not backfilled. Existing frozen pages retain their order.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/459"
+  },
+  {
+    "id": "ugc-slop-v021-available",
+    "kind": "instrumentation",
+    "deploy_scope": "full",
+    "dashboards": [
+      "recommendation-effect"
+    ],
+    "title": "UGC AI Slop V0.2.1 gate available (default off)",
+    "description": "New schema and worker instrumentation are available after deployment. Evaluation and blocking remain disabled until UGC_SLOP_ENABLED is explicitly activated. Historical broadcasts are not relabeled. Global Qwen model replacement and gate activation need separate events and next-day fixed-cohort delivery/positive-feedback checks.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/466"
+  },
+  {
+    "id": "managed-enterprise-identities-v1",
+    "kind": "behavior",
+    "deploy_scope": "full",
+    "dashboards": [
+      "user-growth"
+    ],
+    "title": "Managed enterprise registration available",
+    "description": "Default off. Approved integrations can create anonymous Agent identities without personal onboarding; growth counts include these identities only after explicit integration activation. Deployment alone does not activate access.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/469"
+  },
+  {
+    "id": "managed-context-private-matching-v1",
+    "kind": "behavior",
+    "deploy_scope": "full",
+    "dashboards": [
+      "card-refresh",
+      "recommendation-effect"
+    ],
+    "title": "Managed context updates private matching",
+    "description": "Default off. Approved enterprise context can update Card facts and dedicated matching projections after API, pipeline and Sort activation. Private summaries are excluded from public Cards; existing personal CLI routes and experiment assignments retain their behavior. Deployment alone does not enable enterprise access.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/470"
+  },
+  {
+    "id": "managed-feed-durable-admission-v1",
+    "kind": "behavior",
+    "deploy_scope": "full",
+    "dashboards": [
+      "recommendation-effect"
+    ],
+    "title": "Managed Feed batches use durable admission",
+    "description": "Default off. Activated enterprise requests reserve shared application quota and Agent cadence before generation, and retry saved batches without extra source calls. Unknown outcomes conservatively consume a round. Existing personal CLI Feed cadence and authorization are unchanged. Full API, Feed and Sort rollout is required; deployment alone does not activate enterprise access.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/471"
+  },
+  {
+    "id": "managed-integration-observation-v1",
+    "kind": "instrumentation",
+    "deploy_scope": "full",
+    "dashboards": [
+      "user-growth",
+      "recommendation-effect"
+    ],
+    "title": "Managed integration request diagnostics available",
+    "description": "Default off. Activated enterprise routes observe mapped Agent request counts, recent activity and fixed failure codes for operator inspection. Observations are best effort and not billing totals; admitted generation counters stay transactional. No historical backfill or personal CLI authorization/cadence change. SDK adoption and explicit enterprise activation are separate from deployment.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/472"
+  },
+  {
+    "id": "feed-v2-baseline-context-v1",
+    "kind": "behavior",
+    "deploy_scope": "api",
+    "dashboards": [
+      "user-growth",
+      "card-refresh"
+    ],
+    "title": "Keep baseline Feed readable after onboarding",
+    "description": "API deployment makes completed accounts without personalized discovery input receive baseline Feed compatible with existing strict clients; no client upgrade is required. Historical failures and exposure rows are not backfilled; server delivery alone does not prove successful client consumption.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/473"
+  },
+  {
+    "id": "refresh-funnel-failure-reasons-v1",
+    "kind": "instrumentation",
+    "deploy_scope": "api",
+    "dashboards": [
+      "card-refresh"
+    ],
+    "title": "Distinguish Feed and refresh failure causes",
+    "description": "The deployed API accepts allowlisted failure reasons while retaining coarse failure counters. Detailed reasons require the updated CLI; deploy API before CLI. Old clients and historical errors have no detailed reason, and telemetry does not establish successful Feed consumption.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/473"
+  },
+  {
+    "id": "outer-loop-setup-readback-v1",
+    "kind": "instrumentation",
+    "deploy_scope": "api",
+    "dashboards": [
+      "user-growth"
+    ],
+    "title": "Accept outer-loop setup and scheduler readback observations",
+    "description": "API rollout accepts bounded setup/readback and container/WSL evidence from updated CLIs; deploy receiver before CLI. Native task readback requires updated Skills and CLI adoption. Historical gaps remain unknown; task state is separate from runtime health and business retention.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/479"
+  },
+  {
+    "id": "runtime-cycle-observations-v1",
+    "kind": "instrumentation",
+    "deploy_scope": "api",
+    "dashboards": [
+      "user-growth"
+    ],
+    "title": "Runtime and external-loop observations available",
+    "description": "API accepts environment and cycle stage receipts. Coverage begins only after CLI 1.0.3 adoption; D0 snapshots are not backfilled and missing receipts are not failures. Telemetry does not count as activity. Hardware means CPU architecture only.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/477"
+  },
+  {
+    "id": "feed-context-budget-health-v1",
+    "kind": "instrumentation",
+    "deploy_scope": "full",
+    "dashboards": [
+      "feedback-compliance"
+    ],
+    "title": "Feed batch and detail-fetch health available",
+    "description": "Only CLI 1.0.8 and later report these counters; older clients report zeros, so compare matching CLI cohorts.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/481"
+  },
+  {
+    "id": "broadcast-detail-inspection-v1",
+    "kind": "instrumentation",
+    "deploy_scope": "api",
+    "dashboards": [
+      "recommendation-effect"
+    ],
+    "title": "Record broadcast detail inspections separately from display",
+    "description": "Successful non-author detail reads produce weak inspection signals. Exact exposure attribution needs CLI 1.0.8 or an explicit impression; older clients remain unattributed. No historical backfill, human-click inference or ranking-weight change.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/481"
+  },
+  {
+    "id": "pgc-surface-agent-reporters-v1",
+    "kind": "instrumentation",
+    "deploy_scope": "full",
+    "dashboards": [
+      "recommendation-effect"
+    ],
+    "title": "Exclude server-only detail readers from surface reporters",
+    "description": "Migration 000126 must precede detail-event collection. The rolling seven-day view counts only Agent-reported follow-up kinds; existing event rows are unchanged and historical aggregates are recomputed. API-only rollout does not apply this correction.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/481"
+  },
+  {
+    "id": "passive-cli-version-observation-v1",
+    "kind": "instrumentation",
+    "deploy_scope": "api",
+    "dashboards": [
+      "update-maintenance"
+    ],
+    "title": "Observe CLI versions on passive Agent reads",
+    "description": "After API rollout, successful authenticated CLI settings and pending-notification reads refresh only the CLI version, without counting as activity or runtime readiness. Existing clients benefit on their next read; historical snapshots and missing execution receipts are not backfilled. Correlated execution receipts and deduplicated policy warnings require the new CLI.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/505"
+  },
+  {
+    "id": "install-safety-scanner-filter-v1",
+    "kind": "instrumentation",
+    "deploy_scope": "api",
+    "dashboards": [
+      "user-growth"
+    ],
+    "title": "Exclude safety scanners from install landings",
+    "description": "After API rollout, Google-Safety requests no longer create landing records. Historical rows remain. Referral and reporting repairs require the updated website, installers and CLI; this marker records only API activation.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/508"
+  },
+  {
+    "id": "ugc-summary-ownership-v1",
+    "kind": "behavior",
+    "deploy_scope": "full",
+    "dashboards": [
+      "recommendation-effect"
+    ],
+    "title": "Expose broadcast summary ownership",
+    "description": "UGC ownership defaults off; activation affects new publications only and preserves pinned records on retry. Deployment also changes display translation caching; website labels require a separate release. Historical provenance stays unknown except explicitly audited operations. Four approved historical corrections require separate activation and projection verification; deployment alone does not repair them. Compare fixed-cohort daily positives on the day after recorded activation.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/521"
+  },
+  {
+    "id": "codex-heartbeat-execution-observations-v1",
+    "kind": "instrumentation",
+    "deploy_scope": "api",
+    "dashboards": [
+      "user-growth",
+      "update-maintenance"
+    ],
+    "title": "Trace Codex heartbeat setup and execution gaps",
+    "description": "API accepts separate trigger, delivered-plan, approval-request and interruption observations. Counts require CLI 1.0.23, compatible Skills and owner-reviewed scoped hooks; API rollout alone does not establish client adoption or hook activation. Missing historical events remain unknown, and approval requests do not prove final denial. Existing retention definitions are unchanged.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/537"
+  },
+  {
+    "id": "runtime-stage-failure-categories-v1",
+    "kind": "instrumentation",
+    "deploy_scope": "api",
+    "dashboards": [
+      "update-maintenance",
+      "user-growth"
+    ],
+    "title": "Classified runtime stage failures accepted",
+    "description": "API accepts bounded categories on confirmed failed stages after deployment. Coverage starts only when compatible CLI callers adopt the optional flag; old receipts remain unknown and missing receipts do not establish failure. No historical backfill.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/522"
+  },
+  {
+    "id": "feedback-contract-cli-compatibility-v1",
+    "kind": "behavior",
+    "deploy_scope": "api",
+    "dashboards": [
+      "feedback-compliance"
+    ],
+    "title": "Match Feed Order guidance to CLI capability",
+    "description": "After API rollout, CLI versions before 1.0.0 and unknown versions receive Feed guidance without the unsupported pending-confirmations command. Coverage benefit and a real legacy-client model turn remain unverified; deployment does not prove client execution.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/552"
+  },
+  {
+    "id": "feedback-coverage-measurement-v2",
+    "kind": "instrumentation",
+    "deploy_scope": "full",
+    "dashboards": [
+      "feedback-compliance"
+    ],
+    "title": "Separate Feed basis and delivery-time feedback evidence",
+    "description": "Schema, API, Feed and pipeline rollout adds basis-separated coverage, a delivery_cli_version cohort and acceptance-time evidence. Existing totals and the cli_version cohort keep their definitions; use the new basis series to exclude baseline. New rows start with the rollout; finalized history is not backfilled. Reuse counters and backlog behavior require upgraded clients; their rollout is separate.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/552"
+  },
+  {
+    "id": "discovery-need-recall-v1",
+    "kind": "behavior",
+    "deploy_scope": "full",
+    "dashboards": [
+      "recommendation-effect"
+    ],
+    "title": "Recent Need dense recall available (default off)",
+    "description": "Requires Sort rollout; API-only deployment does not activate it. Compare recorded experiment arms from bucket activation, not deployment time. Lane latency starts after rollout without historical backfill; frozen pages retain their contents.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/553"
+  },
+  {
+    "id": "feed-pending-judgments-and-useful-reads-v1",
+    "kind": "behavior",
+    "deploy_scope": "api",
+    "dashboards": ["feedback-compliance", "recommendation-effect"],
+    "title": "Recommend useful reads and preserve unassessed Feed items",
+    "description": "API activation changes the served scoring contract. Explicit deferral requires CLI 1.0.30 and compatible rules. Compare feedback and surface receipts after observed client adoption; historical zero scores remain ambiguous.",
+    "pr": "https://github.com/GardenVilla/alicerealm/pull/560"
+  }
+]

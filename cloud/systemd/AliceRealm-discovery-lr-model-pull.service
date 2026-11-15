@@ -1,0 +1,20 @@
+[Unit]
+Description=Install an evaluated discovery LR model from OSS
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ecs-user
+Group=ecs-user
+WorkingDirectory=/var/lib/alicerealm-discovery-lr-model
+StateDirectory=alicerealm-discovery-lr-model
+StateDirectoryMode=0750
+RuntimeDirectory=alicerealm-discovery-lr-model
+UMask=0027
+Environment=HOME=/etc/alicerealm-lr-model
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=MODEL_ROOT=/data/models/alicerealm/discovery-lr
+Environment=OSS_BUCKET=alicerealm-1862681177372549
+Environment=OSS_MODEL_PREFIX=rec/model/discovery_lr
+ExecStart=/usr/bin/flock -n /run/alicerealm-discovery-lr-model/pull.lock /var/lib/alicerealm-deployer/current/source/scripts/cloud/install_lr_model.sh --oss-latest

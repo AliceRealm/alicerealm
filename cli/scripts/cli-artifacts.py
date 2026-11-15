@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+"""Generate and verify checksums for the complete CLI release, after any signing."""
+import argparse
+import base64
+import binascii
+from concurrent.futures import ThreadPoolExecutor
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import sys
+from urllib.request import urlopen
+import uuid
+
+BINARIES = tuple(
+    f"alicerealm-{os}-{arch}" + (".exe" if os == "windows" else "")
+    for os in ("linux", "darwin", "windows") for arch in ("amd64", "arm64")
+)
+PACKAGES = tuple(name + ".zip" for name in BINARIES)
+ARTIFACTS = BINARIES + PACKAGES
+
+
+def digest(stream):
+    result = hashlib.sha256()
+    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+        result.update(chunk)
+    return result.hexdigest()
+
+
+def checksums(build):
+    result = {}
+    for name in ARTIFACTS:
+        path = build / name
+        if not path.is_file() or path.stat().st_size == 0:
+            raise ValueError(f"missing or empty CLI binary: {path}")
+        with path.open("rb") as stream:
+            result[name] = digest(stream)
+    return result
+
+
+def generate(build):
+    for name, value in checksums(build).items():
+        (build / (name + ".sha256")).write_text(value + "\n", encoding="ascii")
+
+
+def verify(build):
+    expected = checksums(build)
+    for name, value in expected.items():
+        actual = (build / (name + ".sha256")).read_text(encoding="ascii").strip()
+        if not re.fullmatch(r"[0-9a-f]{64}", actual) or actual != value:
+            raise ValueError(f"SHA256 mismatch or invalid checksum: {name}")
+    return expected
+
+
+def parallel(operation, items):
+    setting = os.environ.get('ALICEREALM_RELEASE_WORKERS', '3')
+    if not re.fullmatch(r'[1-8]', setting):
+        raise ValueError('ALICEREALM_RELEASE_WORKERS must be an integer from 1 to 8')
+    errors = []
+    with ThreadPoolExecutor(max_workers=int(setting)) as executor:
+        futures = [executor.submit(operation, item) for item in items]
+        for future in futures:
+            try:
+                future.result()
+            except Exception as error:
+                errors.append(error)
+    if errors:
+        raise errors[0]
+
+
+def verify_public(build, base_url):
+    # Verify actual payloads, not merely remote checksums from a stale release.
+    def verify_artifact(item):
+        name, value = item
+        url = base_url.rstrip("/") + "/" + name
+        query = "?verify=" + uuid.uuid4().hex
+        with urlopen(url + ".sha256" + query, timeout=30) as response:
+            checksum = response.read(1024).decode("ascii").strip()
+        if checksum != value:
+            raise ValueError(f"published checksum differs from build: {name}")
+        with urlopen(url + query, timeout=30) as response:
+            if digest(response) != value:
+                raise ValueError(f"published binary differs from build: {name}")
+    parallel(verify_artifact, verify(build).items())
+
+
+def manifest_files(build):
+    files = ['release.json', 'package-release.json']
+    extra = ['release-v2.json', 'package-release-v2.json']
+    if any((build / name).exists() for name in extra):
+        if not all((build / name).is_file() for name in extra):
+            raise ValueError('incomplete v2 release metadata')
+        files += extra
+    return files
+
+
+def verify_release(build):
+    # The updater verifies Ed25519 authenticity; publication preflight ensures
+    # the signed manifest describes the complete, final (including signed) build.
+    version = (build / 'version.txt').read_text(encoding='ascii').strip()
+    if not re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', version):
+        raise ValueError('invalid CLI release version')
+    expected = verify(build)
+    for filename in manifest_files(build):
+        manifest = json.loads((build / filename).read_text(encoding='utf-8'))
+        packaged = filename.startswith('package-release')
+        if '-v2.' in filename:
+            notifier = manifest.get('notifier_version', '')
+            if not re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', notifier):
+                raise ValueError('invalid signed notifier version')
+            peer = 'release-v2.json' if packaged else 'package-release-v2.json'
+            if json.loads((build / peer).read_text()).get('notifier_version') != notifier:
+                raise ValueError('v2 notifier versions differ')
+        if manifest.get('version') != version or set(manifest.get('artifacts', {})) != set(BINARIES):
+            raise ValueError('CLI release manifest version or platform set differs from build')
+        if (packaged and set(manifest.get('packages', {})) != set(PACKAGES)) or (not packaged and 'packages' in manifest):
+            raise ValueError('CLI package manifest differs from build or breaks legacy signature')
+        try:
+            signature = base64.b64decode(manifest.get('signature', ''), validate=True)
+        except (binascii.Error, TypeError, ValueError) as error:
+            raise ValueError('invalid CLI release signature encoding') from error
+        if len(signature) != 64:
+            raise ValueError('CLI release manifest is unsigned')
+        for name in (ARTIFACTS if packaged else BINARIES):
+            artifact = manifest['packages' if name.endswith('.zip') else 'artifacts'][name]
+            if artifact.get('sha256') != expected[name] or artifact.get('size') != (build / name).stat().st_size:
+                raise ValueError(f'CLI release manifest differs from final binary: {name}')
+
+
+def verify_release_public(build, base_url):
+    verify_release(build)
+    query = '?verify=' + uuid.uuid4().hex
+    def verify_manifest(filename):
+        with urlopen(base_url.rstrip('/') + '/' + filename + query, timeout=30) as response:
+            if response.read(1024 * 1024 + 1) != (build / filename).read_bytes():
+                raise ValueError('published CLI release manifest differs from build')
+    parallel(verify_manifest, manifest_files(build))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("command", choices=("generate", "verify", "list", "verify-public", "verify-release", "verify-release-public"))
+    parser.add_argument("build", type=Path)
+    parser.add_argument("--base-url")
+    args = parser.parse_args()
+    if args.command == "generate":
+        generate(args.build)
+    elif args.command == "verify-release":
+        verify_release(args.build)
+    elif args.command == "verify-release-public":
+        if not args.base_url:
+            parser.error('verify-release-public requires --base-url')
+        verify_release_public(args.build, args.base_url)
+    elif args.command == "verify-public":
+        if not args.base_url:
+            parser.error("verify-public requires --base-url")
+        verify_public(args.build, args.base_url)
+    else:
+        verify(args.build)
+        if args.command == "list":
+            for name in ARTIFACTS:
+                print(name)
+                print(name + ".sha256")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError) as error:
+        sys.exit(str(error))

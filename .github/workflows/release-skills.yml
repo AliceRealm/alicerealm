@@ -1,0 +1,259 @@
+name: Release Skills
+
+# Publishes the AliceRealm skills bundle to Cloudflare R2 (skills/latest + cli/latest)
+# WITHOUT a CLI binary release — the CI equivalent of running
+# cli/scripts/release-skills.sh locally. Clients pick up the change on their next
+# `skills sync` by comparing the manifest content-hash `revision`.
+#
+# Required repo secrets (Settings -> Secrets and variables -> Actions):
+#   R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY  (a scoped R2 API token, Object R/W on the bucket)
+#   R2_ENDPOINT, R2_BUCKET, R2_PUBLIC_URL   (non-secret account values; kept as secrets for simplicity)
+#   ALICEREALM_SKILLS_SIGNING_KEY            (Ed25519 private key, PKCS8 PEM or base64)
+#   ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY      (matching Ed25519 public key, base64)
+
+on:
+  workflow_run:
+    workflows: [Release CLI]
+    types: [in_progress]
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - 'skills/**'                    # the skills source of truth
+      - 'cli/internal/skills/types.go' # ProdAllowlist — which skills get packaged
+      - 'cli/scripts/release-skills.sh'
+      - 'cli/scripts/skills-release-state.py'
+      - 'cli/scripts/publish-install-doc.py'
+      - 'cli/internal/skills/release.go'
+      - 'cli/internal/skills/production_versions.go'
+      - 'cli/cmd/manifestgen/**'
+      - '.github/workflows/release-skills.yml'
+      - 'cli/.cli.config'              # SKILLS_MIN_CLI_VERSION / SKILLS_REVISION
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Reverify and publish even when this source already succeeded
+        type: boolean
+        default: false
+
+# contents: write — the sync step commits static/feed_contract.md back to main,
+# or to a chore/ branch when branch protection rejects the direct push.
+permissions:
+  contents: read
+  actions: read
+
+# One publish at a time — the job overwrites the same skills/latest objects.
+concurrency:
+  group: release-skills-main
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.ref == 'refs/heads/main' && (github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    outputs:
+      source_sha: ${{ steps.source.outputs.sha }}
+      trusted_ci: ${{ steps.plan.outputs.trusted_ci }}
+      defer_to_cli: ${{ steps.plan.outputs.defer_to_cli }}
+      duplicate_release: ${{ steps.plan.outputs.duplicate_release }}
+      publication_receipt: ${{ steps.plan.outputs.publication_receipt }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          fetch-depth: 0
+      - id: source
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+        run: python3 cli/scripts/release-plan.py --check-duplicate --repository "$GITHUB_REPOSITORY" --sha '${{ steps.source.outputs.sha }}' --event-name "$GITHUB_EVENT_NAME" --event-path "$GITHUB_EVENT_PATH" --github-output "$GITHUB_OUTPUT"
+      - name: Summarize a verified duplicate
+        if: steps.plan.outputs.duplicate_release == 'true'
+        env:
+          PREVIOUS_RUN: ${{ steps.plan.outputs.duplicate_run_id }}
+        run: echo "Verified duplicate; preparation and publication skipped. Reused run $PREVIOUS_RUN." >> "$GITHUB_STEP_SUMMARY"
+      - name: Explain a combined CLI release
+        if: steps.plan.outputs.defer_to_cli == 'true'
+        run: echo 'Skills publication deferred until the matching CLI release succeeds.' >> "$GITHUB_STEP_SUMMARY"
+
+  prepare:
+    needs: plan
+    if: needs.plan.outputs.defer_to_cli != 'true' && needs.plan.outputs.duplicate_release != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+      - name: Provide gtar
+        run: sudo ln -sf "$(command -v tar)" /usr/local/bin/gtar
+      - name: Test release-specific safeguards
+        run: |
+          aws s3api put-object --generate-cli-skeleton input | python3 -c 'import json,sys; assert "IfNoneMatch" in json.load(sys.stdin)'
+          cd cli
+          go test ./cmd/manifestcheck ./cmd/releaseverify ./cmd/clirelease
+      - name: Recheck CI after release-specific preparation
+        id: ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 cli/scripts/release-plan.py --repository "$GITHUB_REPOSITORY" --sha '${{ needs.plan.outputs.source_sha }}' --github-output "$GITHUB_OUTPUT"
+      - name: Run uncovered tests when matching main CI is unavailable
+        if: steps.ci.outputs.trusted_ci != 'true'
+        run: |
+          python3 -m unittest discover -s tests/cli_release -p 'test_*.py'
+          cd cli
+          go test ./internal/skills ./internal/selfupdate ./cmd ./tests
+          cd ..
+          go test ./api/install -run 'TestJoinDocument|TestServeRef' -count=1
+      - name: Prepare and verify signed Skills without reserving a release
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+          ALICEREALM_SKILLS_SIGNING_KEY: ${{ secrets.ALICEREALM_SKILLS_SIGNING_KEY }}
+          ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY: ${{ secrets.ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY }}
+        run: |
+          signing_key_file="$RUNNER_TEMP/alicerealm-skills-signing-key"
+          (umask 077; printf '%s' "$ALICEREALM_SKILLS_SIGNING_KEY" > "$signing_key_file")
+          export ALICEREALM_SKILLS_SIGNING_KEY_FILE="$signing_key_file"
+          bash cli/scripts/release-skills.sh --prepare
+      - name: Preserve the verified build for failed-job retry
+        run: tar -cf "$RUNNER_TEMP/skills-release.tar" build/cli
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: skills-release-${{ needs.plan.outputs.source_sha }}
+          path: ${{ runner.temp }}/skills-release.tar
+          compression-level: 0
+          retention-days: 14
+          overwrite: true
+          if-no-files-found: error
+      - name: Remove temporary signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/alicerealm-skills-signing-key"
+
+  cli_ready:
+    needs: [plan, prepare]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Wait for the matching CLI release outside the publication lock
+        if: github.event_name == 'workflow_run'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CLI_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: gh run watch "$CLI_RUN_ID" --exit-status --interval 15
+
+  publish:
+    needs: [plan, prepare, cli_ready]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    concurrency:
+      group: release-r2
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: skills-release-${{ needs.plan.outputs.source_sha }}
+          path: ${{ runner.temp }}/skills-release
+      - name: Restore prepared files and executable permissions
+        run: tar -xf "$RUNNER_TEMP/skills-release/skills-release.tar"
+      - name: Publish or verify an unchanged signed Skills release
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+          ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY: ${{ secrets.ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY }}
+        run: bash cli/scripts/release-skills.sh --publish
+
+      # static/feed_contract.md is served at runtime by the api gateway but only
+      # regenerated by build.sh at deploy time, so the git copy drifts behind
+      # canonical between backend deploys. Sync it here — after the publish, so a
+      # rejected push can never block a skills release. The commit touches only
+      # static/, which is outside this workflow's trigger paths — no loop.
+      # A direct push to main only lands if github-actions[bot] can bypass the
+      # "changes must be made through a pull request" rule (it cannot under
+      # classic branch protection — that needs a ruleset with an Integration
+      # bypass actor). When the push is rejected we park the fix on a branch and
+      # fail, so the drift surfaces as actionable work rather than rotting.
+      - name: Sync feed contract into static/
+        run: |
+          set -euo pipefail
+          bash scripts/common/sync-feed-contract.sh
+          if git diff --quiet -- static/feed_contract.md static/feed_baseline_contract.md; then
+            echo "static/feed_contract.md already in sync"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add static/feed_contract.md static/feed_baseline_contract.md
+          git commit -m "chore(static): sync feed_contract.md from canonical skill source"
+          # main may have moved during the publish step; rebase onto it before pushing.
+          git fetch origin main
+          git rebase origin/main
+          if git push origin HEAD:main 2>/tmp/push.err; then
+            echo "- synced static/feed_contract.md directly to main (\`$(git rev-parse --short HEAD)\`)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          cat /tmp/push.err
+          # Rejected. Park the fix on a branch so merging it is one click, and
+          # fail loudly — a silent skip would let the drift rot unnoticed. The
+          # skills publish above already succeeded; only this step is red.
+          branch="chore/sync-feed-contract"
+          git push -f origin "HEAD:refs/heads/${branch}"
+          {
+            echo "### ⚠️ static/feed_contract.md is out of sync"
+            echo "Direct push to \`main\` was rejected by branch protection."
+            echo "The regenerated file is pushed to \`${branch}\` — open a PR:"
+            echo "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/main...${branch}?expand=1"
+            echo ""
+            echo "Skills were published successfully; this step only tracks the git copy."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::static/feed_contract.md drifted from canonical; fix parked on ${branch}"
+          exit 1
+
+      - name: Summarize published revision
+        if: always()
+        env:
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+        run: |
+          if [ -f build/cli/manifest.json ]; then
+            rev=$(grep -o '"revision"[^,]*' build/cli/manifest.json | head -1)
+            echo "### Skills release result" >> "$GITHUB_STEP_SUMMARY"
+            if [ -f build/cli/release-state/publication.json ]; then
+              action=$(python3 -c 'import json; print(json.load(open("build/cli/release-state/publication.json"))["action"])')
+              echo "- publication action: $action (noop preserves the signed sequence)" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            echo "- built manifest: \`${rev}\`" >> "$GITHUB_STEP_SUMMARY"
+            live=$(curl -fsS "${R2_PUBLIC_URL}/skills/latest/manifest.json" | grep -o '"revision"[^,]*' | head -1 || echo "unavailable")
+            echo "- live on R2: \`${live}\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No manifest built — publish step did not reach the build stage." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "- installation entry: https://cdn.alicerealm.ai/skills/latest/install.md (verified against skills/install.md)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # Record only a fully verified publication; failed runs cannot be reused.
+      - name: Preserve the successful publication manifest for duplicate detection
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ needs.plan.outputs.publication_receipt }}
+          path: build/cli/manifest.json
+          retention-days: 14
+          overwrite: true
+          if-no-files-found: error

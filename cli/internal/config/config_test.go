@@ -1,0 +1,371 @@
+package config
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestLoadCreatesDefault(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ALICEREALM_HOME", dir)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.DefaultServer != "alicerealm" {
+		t.Errorf("DefaultServer = %q, want %q", cfg.DefaultServer, "alicerealm")
+	}
+	i := cfg.findServer("alicerealm")
+	if i < 0 {
+		t.Fatal("expected alicerealm server to exist")
+	}
+	if cfg.Servers[i].Endpoint != "https://alicerealm.com" {
+		t.Errorf("default endpoint = %q, want %q", cfg.Servers[i].Endpoint, "https://alicerealm.com")
+	}
+	if cfg.Servers[i].StreamEndpoint != "wss://stream.alicerealm.com" {
+		t.Errorf("default stream endpoint = %q, want %q", cfg.Servers[i].StreamEndpoint, "wss://stream.alicerealm.com")
+	}
+	if cfg.Servers[i].CommissionEndpoint != "https://alicerealm.com" {
+		t.Errorf("default Commission endpoint = %q, want %q", cfg.Servers[i].CommissionEndpoint, "https://alicerealm.com")
+	}
+}
+
+func TestHomeDirPrefersAliceRealmAndSupportsLegacyEigenFlux(t *testing.T) {
+	modernRoot := t.TempDir()
+	legacyRoot := t.TempDir()
+	t.Setenv("ALICEREALM_HOME", modernRoot)
+	t.Setenv("EIGENFLUX_HOME", legacyRoot)
+
+	if got, want := HomeDir(), filepath.Join(modernRoot, ".alicerealm"); got != want {
+		t.Fatalf("HomeDir() = %q, want %q", got, want)
+	}
+	os.Unsetenv("ALICEREALM_HOME")
+	if got, want := HomeDir(), filepath.Join(legacyRoot, ".eigenflux"); got != want {
+		t.Fatalf("legacy HomeDir() = %q, want %q", got, want)
+	}
+}
+
+func TestLoadBackfillsOfficialCommissionEndpoint(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("EIGENFLUX_HOME", dir)
+	os.Unsetenv("ALICEREALM_HOME")
+	home := filepath.Join(dir, ".eigenflux")
+	if err := os.MkdirAll(home, 0700); err != nil {
+		t.Fatal(err)
+	}
+	legacy := []byte(`{"default_server":"eigenflux","servers":[{"name":"eigenflux","endpoint":"https://www.eigenflux.ai","stream_endpoint":"wss://stream.eigenflux.ai"}]}`)
+	if err := os.WriteFile(filepath.Join(home, "config.json"), legacy, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	server, err := cfg.GetActive("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if server.CommissionEndpoint != "https://www.eigenflux.ai" {
+		t.Errorf("backfilled Commission endpoint = %q, want %q", server.CommissionEndpoint, "https://www.eigenflux.ai")
+	}
+}
+
+func TestAddAndRemoveServer(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ALICEREALM_HOME", dir)
+	cfg, _ := Load()
+	err := cfg.AddServer("staging", "https://staging.alicerealm.com")
+	if err != nil {
+		t.Fatalf("AddServer error: %v", err)
+	}
+	if cfg.findServer("staging") < 0 {
+		t.Error("expected staging server")
+	}
+	err = cfg.AddServer("staging", "https://other.alicerealm.com")
+	if err == nil {
+		t.Error("expected error for duplicate server name")
+	}
+	err = cfg.RemoveServer("staging")
+	if err != nil {
+		t.Fatalf("RemoveServer error: %v", err)
+	}
+	if cfg.findServer("staging") >= 0 {
+		t.Error("staging should be removed")
+	}
+	err = cfg.RemoveServer("alicerealm")
+	if err == nil {
+		t.Error("expected error removing default server")
+	}
+}
+
+func TestSetCurrent(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ALICEREALM_HOME", dir)
+	cfg, _ := Load()
+	cfg.AddServer("staging", "https://staging.alicerealm.com")
+	err := cfg.SetCurrent("staging")
+	if err != nil {
+		t.Fatalf("SetCurrent error: %v", err)
+	}
+	if cfg.DefaultServer != "staging" {
+		t.Errorf("DefaultServer = %q, want %q", cfg.DefaultServer, "staging")
+	}
+	err = cfg.SetCurrent("nonexistent")
+	if err == nil {
+		t.Error("expected error for nonexistent server")
+	}
+}
+
+func TestGetActive(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ALICEREALM_HOME", dir)
+	cfg, _ := Load()
+	cfg.AddServer("staging", "https://staging.alicerealm.com")
+	srv, err := cfg.GetActive("")
+	if err != nil {
+		t.Fatalf("GetActive error: %v", err)
+	}
+	if srv.Name != "alicerealm" {
+		t.Errorf("active = %q, want %q", srv.Name, "alicerealm")
+	}
+	srv, err = cfg.GetActive("staging")
+	if err != nil {
+		t.Fatalf("GetActive(staging) error: %v", err)
+	}
+	if srv.Name != "staging" {
+		t.Errorf("active = %q, want %q", srv.Name, "staging")
+	}
+}
+
+func TestUpdateServer(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ALICEREALM_HOME", dir)
+	cfg, _ := Load()
+	err := cfg.UpdateServer("alicerealm", "https://new.alicerealm.com", "")
+	if err != nil {
+		t.Fatalf("UpdateServer error: %v", err)
+	}
+	i := cfg.findServer("alicerealm")
+	if cfg.Servers[i].Endpoint != "https://new.alicerealm.com" {
+		t.Errorf("endpoint = %q, want %q", cfg.Servers[i].Endpoint, "https://new.alicerealm.com")
+	}
+}
+
+func TestCommissionBaseURLDerivesLocalAndRequiresHostedConfig(t *testing.T) {
+	local := Server{Name: "local", Endpoint: "http://localhost:8080"}
+	got, err := local.CommissionBaseURL()
+	if err != nil || got != "http://localhost:8090" {
+		t.Fatalf("local CommissionBaseURL = %q, %v", got, err)
+	}
+	ipv6 := Server{Name: "local-v6", Endpoint: "http://[::1]:8080"}
+	got, err = ipv6.CommissionBaseURL()
+	if err != nil || got != "http://[::1]:8090" {
+		t.Fatalf("IPv6 CommissionBaseURL = %q, %v", got, err)
+	}
+	hosted := Server{Name: "hosted", Endpoint: "https://api.example.com"}
+	if _, err := hosted.CommissionBaseURL(); err == nil {
+		t.Fatal("hosted server without Commission endpoint should fail")
+	}
+	hosted.CommissionEndpoint = "https://commission.example.com/"
+	got, err = hosted.CommissionBaseURL()
+	if err != nil || got != "https://commission.example.com" {
+		t.Fatalf("explicit CommissionBaseURL = %q, %v", got, err)
+	}
+}
+
+func TestSaveAndReload(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ALICEREALM_HOME", dir)
+	cfg, _ := Load()
+	cfg.AddServer("staging", "https://staging.alicerealm.com")
+	cfg.Save()
+	cfg2, err := Load()
+	if err != nil {
+		t.Fatalf("reload error: %v", err)
+	}
+	if cfg2.findServer("staging") < 0 {
+		t.Error("staging server should persist after save/reload")
+	}
+}
+
+func TestHomeDir(t *testing.T) {
+	// Env var without .alicerealm suffix — should auto-append.
+	dir := t.TempDir()
+	t.Setenv("ALICEREALM_HOME", dir)
+	home := HomeDir()
+	want := filepath.Join(dir, ".alicerealm")
+	if home != want {
+		t.Errorf("HomeDir = %q, want %q", home, want)
+	}
+
+	// Env var already ending in .alicerealm — no double suffix.
+	efDir := filepath.Join(t.TempDir(), ".alicerealm")
+	t.Setenv("ALICEREALM_HOME", efDir)
+	home = HomeDir()
+	if home != efDir {
+		t.Errorf("HomeDir = %q, want %q (should not double-suffix)", home, efDir)
+	}
+
+	// No env var — default to ~/.alicerealm.
+	t.Setenv("ALICEREALM_HOME", "")
+	os.Unsetenv("ALICEREALM_HOME")
+	home = HomeDir()
+	userHome, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := filepath.Join(userHome, ".alicerealm")
+	if home != expected {
+		t.Errorf("HomeDir = %q, want %q", home, expected)
+	}
+}
+
+func TestSetHomeDir_OverridesEnv(t *testing.T) {
+	envDir := t.TempDir()
+	flagDir := t.TempDir()
+
+	t.Setenv("ALICEREALM_HOME", envDir)
+	SetHomeDir(flagDir)
+	t.Cleanup(func() { SetHomeDir("") })
+
+	got := HomeDir()
+	want := filepath.Join(flagDir, ".alicerealm")
+	if got != want {
+		t.Errorf("HomeDir = %q, want %q (--homedir should override env)", got, want)
+	}
+}
+
+func TestSetHomeDir_Empty_FallsBackToEnv(t *testing.T) {
+	envDir := t.TempDir()
+	t.Setenv("ALICEREALM_HOME", envDir)
+	SetHomeDir("")
+
+	got := HomeDir()
+	want := filepath.Join(envDir, ".alicerealm")
+	if got != want {
+		t.Errorf("HomeDir = %q, want %q (empty override should fall back to env)", got, want)
+	}
+
+}
+
+func TestSetHomeDir_AlreadySuffixed(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), ".alicerealm")
+	SetHomeDir(dir)
+	t.Cleanup(func() { SetHomeDir("") })
+
+	got := HomeDir()
+	if got != dir {
+		t.Errorf("HomeDir = %q, want %q (should not double-suffix)", got, dir)
+	}
+}
+
+func TestKV_GlobalRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ALICEREALM_HOME", dir)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.SetKV("plugin_version", "1.2.0"); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reloaded.GetKV("plugin_version"); got != "1.2.0" {
+		t.Errorf("GetKV = %q, want %q", got, "1.2.0")
+	}
+	if err := reloaded.SetKV("plugin_version", ""); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, _ = Load()
+	if got := reloaded.GetKV("plugin_version"); got != "" {
+		t.Errorf("after delete, GetKV = %q, want empty", got)
+	}
+}
+
+func TestKV_ServerScopedWithFallback(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ALICEREALM_HOME", dir)
+
+	cfg, _ := Load()
+	if err := cfg.AddServerFull("staging", "https://staging.example", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.SetKV("shared", "global-val"); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.SetServerKV("staging", "shared", "staging-val"); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, _ := Load()
+
+	// Per-server hit beats global.
+	v, ok, err := reloaded.GetServerKV("staging", "shared")
+	if err != nil || !ok || v != "staging-val" {
+		t.Errorf("staging/shared = (%q,%v,%v), want (\"staging-val\",true,nil)", v, ok, err)
+	}
+	// Server with no entry falls back to global.
+	v, ok, err = reloaded.GetServerKV("alicerealm", "shared")
+	if err != nil || !ok || v != "global-val" {
+		t.Errorf("alicerealm/shared fallback = (%q,%v,%v)", v, ok, err)
+	}
+	// Missing key returns ok=false.
+	if _, ok, _ := reloaded.GetServerKV("staging", "missing"); ok {
+		t.Error("expected ok=false for missing key")
+	}
+	// Empty value deletes the per-server override.
+	if err := reloaded.SetServerKV("staging", "shared", ""); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, _ = Load()
+	v, _, _ = reloaded.GetServerKV("staging", "shared")
+	if v != "global-val" {
+		t.Errorf("after per-server delete, staging/shared = %q, want global fallback", v)
+	}
+}
+
+func TestClearServerScopedKV(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ALICEREALM_HOME", dir)
+
+	cfg, _ := Load()
+	if err := cfg.AddServerFull("staging", "https://staging.example", ""); err != nil {
+		t.Fatal(err)
+	}
+	// Same key stranded under two server scopes plus a global value.
+	if err := cfg.SetKV("feed_delivery_preference", "global-pref"); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.SetServerKV("staging", "feed_delivery_preference", "staging-pref"); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.SetServerKV("alicerealm", "feed_delivery_preference", "alicerealm-pref"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := cfg.ClearServerScopedKV("feed_delivery_preference"); err != nil {
+		t.Fatal(err)
+	}
+
+	reloaded, _ := Load()
+	// Every server-scoped copy is gone (inspect the server KV map directly,
+	// without GetServerKV's global fallback)...
+	for i := range reloaded.Servers {
+		if _, ok := reloaded.Servers[i].KV["feed_delivery_preference"]; ok {
+			t.Errorf("server %q still has a server-scoped copy after clear", reloaded.Servers[i].Name)
+		}
+	}
+	// ...but the global value survives.
+	if got := reloaded.GetKV("feed_delivery_preference"); got != "global-pref" {
+		t.Errorf("global value = %q, want %q (must be untouched)", got, "global-pref")
+	}
+	// Idempotent: clearing again when absent is a no-op without error.
+	if err := reloaded.ClearServerScopedKV("feed_delivery_preference"); err != nil {
+		t.Errorf("second clear should be a no-op, got err: %v", err)
+	}
+}

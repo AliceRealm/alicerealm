@@ -1,0 +1,451 @@
+package watchservice
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestNotificationLaunchAgentPreservesExistingWrapper(t *testing.T) {
+	for _, mode := range []string{"prepare", "start", "active", "disabled", "wrong_account", "ambiguous", "disabled_os", "writable", "symlink", "old_cli", "unverifiable_wrapper", "wrong_pin"} {
+		t.Run(mode, func(t *testing.T) {
+			home := t.TempDir()
+			dir := filepath.Join(home, "Library", "LaunchAgents")
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			cli := filepath.Join(home, "alicerealm")
+			if err := os.WriteFile(cli, []byte("fixture"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			task := NotificationTask{CLI: cli, Home: home, Server: "alicerealm", Dispatch: true, AgentID: "agent", PrincipalID: "owner", PrepareOnly: mode == "prepare" || mode == "active"}
+			if mode == "old_cli" {
+				task.CLI = filepath.Join(home, "new", "alicerealm")
+				if err := os.MkdirAll(filepath.Dir(task.CLI), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(task.CLI, []byte("new"), 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			wrapper := filepath.Join(home, "run watch.sh")
+			content := "#!/bin/bash\nset -eu\numask 077\nexport PATH=\"/usr/bin:/bin\"\nexec '" + cli + "' --homedir '" + home + "' --server alicerealm watch --dispatch\n"
+			if mode == "unverifiable_wrapper" {
+				content = "source /tmp/unknown\n" + content
+			}
+			if mode == "wrong_account" {
+				content = strings.Replace(content, "--server alicerealm", "--server other", 1)
+			}
+			if err := os.WriteFile(wrapper, []byte(content), 0700); err != nil {
+				t.Fatal(err)
+			}
+			file := filepath.Join(dir, "watch.plist")
+			if err := os.WriteFile(file, []byte("unchanged"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if mode == "ambiguous" {
+				if err := os.WriteFile(filepath.Join(dir, "other.plist"), []byte("unchanged"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if mode == "writable" {
+				if err := os.Chmod(file, 0666); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if mode == "symlink" {
+				if err := os.Remove(file); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(wrapper, file); err != nil {
+					t.Fatal(err)
+				}
+			}
+			def := notificationLaunchDefinition{Label: "ai.alicerealm.fixture", ProgramArguments: []string{"/bin/bash", wrapper}, WorkingDirectory: home, Disabled: mode == "disabled"}
+			if mode == "wrong_pin" {
+				def.EnvironmentVariables = map[string]string{"ALICEREALM_WATCH_EXPECTED_AGENT": "other", "ALICEREALM_WATCH_EXPECTED_PRINCIPAL": "owner"}
+			}
+			definition, _ := json.Marshal(def)
+			var mutations []string
+			loaded := mode != "start"
+			run := func(_ context.Context, program string, args ...string) ([]byte, error) {
+				if program == "/usr/bin/plutil" {
+					return definition, nil
+				}
+				if args[0] == "print-disabled" && mode == "disabled_os" {
+					return []byte("\"ai.alicerealm.fixture\" => true\n"), nil
+				}
+				if args[0] == "print-disabled" || args[0] == "print" && strings.Count(args[1], "/") == 1 {
+					return nil, nil
+				}
+				switch args[0] {
+				case "print":
+					if !loaded {
+						return nil, launchctlTestExit(113)
+					}
+					if mode == "active" || len(mutations) > 0 {
+						return []byte("\tstate = running\n\tpid = 24680\n"), nil
+					}
+					return []byte("\tstate = waiting\n"), nil
+				case "bootout", "bootstrap", "kickstart":
+					mutations = append(mutations, args[0])
+					loaded = args[0] != "bootout"
+				default:
+					t.Fatal(args)
+				}
+				return nil, nil
+			}
+			result, err := startNotificationLaunchAgent(context.Background(), task, home, os.Getuid(), run)
+			if mode == "disabled" || mode == "disabled_os" {
+				if err != nil || result.Status != "skipped_disabled" || len(mutations) != 0 {
+					t.Fatalf("disabled result %+v %v %v", result, err, mutations)
+				}
+				return
+			}
+			if mode == "active" || mode == "wrong_account" || mode == "ambiguous" || mode == "writable" || mode == "symlink" || mode == "old_cli" || mode == "unverifiable_wrapper" || mode == "wrong_pin" {
+				if err == nil || len(mutations) != 0 {
+					t.Fatalf("unsafe result %+v %v mutations=%v", result, err, mutations)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if mode == "prepare" && result.Status != "task_stopped" || mode == "start" && result.PID != 24680 {
+				t.Fatalf("result %+v", result)
+			}
+			raw, _ := os.ReadFile(file)
+			if string(raw) != "unchanged" {
+				t.Fatal("plist overwritten")
+			}
+			raw, _ = os.ReadFile(wrapper)
+			if string(raw) != content {
+				t.Fatal("wrapper overwritten")
+			}
+		})
+	}
+}
+
+func TestNotificationWrapperRejectsUnverifiableCommands(t *testing.T) {
+	for _, raw := range []string{"exec $CLI --homedir /x", "exec /bin/echo hi; touch /tmp/x", "source /tmp/config\nexec /bin/echo", "exec /bin/echo\nexit 0", "exec 'unterminated"} {
+		if _, err := notificationWrapperCommand(raw); err == nil {
+			t.Fatalf("accepted %q", raw)
+		}
+	}
+}
+
+func TestMissingAccountLaunchAgentCreatedOrPreservesDisable(t *testing.T) {
+	for _, disabled := range []bool{false, true} {
+		t.Run(map[bool]string{false: "create", true: "disabled"}[disabled], func(t *testing.T) {
+			home := t.TempDir()
+			cli := filepath.Join(home, "alicerealm")
+			if err := os.WriteFile(cli, []byte("fixture"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			task := NotificationTask{CLI: cli, Home: home, Server: "alicerealm", Scope: strings.Repeat("a", 32), AgentID: "agent", PrincipalID: "owner", Dispatch: false}
+			label := "ai.alicerealm.watch." + task.Scope
+			file := filepath.Join(home, "Library", "LaunchAgents", label+".plist")
+			loaded := false
+			run := func(_ context.Context, program string, args ...string) ([]byte, error) {
+				switch args[0] {
+				case "print-disabled":
+					if disabled {
+						return []byte(`"` + label + `" => true`), nil
+					}
+					return nil, nil
+				case "print":
+					if args[1] == "gui/501" || !strings.Contains(args[1], "/ai.") {
+						return nil, nil
+					}
+					if !loaded {
+						return nil, launchctlTestExit(113)
+					}
+					return []byte("\tstate = running\n\tpid = 12345\n"), nil
+				case "bootstrap":
+					loaded = true
+					return nil, nil
+				case "kickstart":
+					return nil, nil
+				default:
+					t.Fatalf("unexpected %s %v", program, args)
+					return nil, nil
+				}
+			}
+			result, err := startNotificationLaunchAgent(context.Background(), task, home, 501, run)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if disabled {
+				if result.Status != "skipped_disabled" {
+					t.Fatal(result)
+				}
+				if _, err := os.Stat(file); !os.IsNotExist(err) {
+					t.Fatal("disabled task files written")
+				}
+				return
+			}
+			raw, err := os.ReadFile(file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.PID != 12345 || !strings.Contains(string(raw), "<string>--notifications-only</string>") || !strings.Contains(string(raw), "<key>KeepAlive</key><true/>") || !strings.Contains(string(raw), "<key>ALICEREALM_WATCH_EXPECTED_AGENT</key><string>agent</string>") {
+				t.Fatalf("result=%+v plist=%s", result, raw)
+			}
+			if err := writeNotificationLaunchAgent(file, task, label); err == nil {
+				t.Fatal("existing launcher overwritten")
+			}
+		})
+	}
+}
+
+func TestLaunchAgentForAnotherHomeDoesNotBlockRecovery(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, "Library", "LaunchAgents")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	cli := filepath.Join(home, "alicerealm")
+	if err := os.WriteFile(cli, []byte("fixture"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, "other-account.plist")
+	if err := os.WriteFile(file, []byte("preserve"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	other := notificationLaunchDefinition{Label: "ai.alicerealm.watch.other", ProgramArguments: []string{cli, "--homedir", filepath.Join(home, "other"), "--server", "alicerealm", "watch", "--dispatch"}, EnvironmentVariables: map[string]string{"ALICEREALM_WATCH_EXPECTED_AGENT": "other-agent", "ALICEREALM_WATCH_EXPECTED_PRINCIPAL": "other-owner"}}
+	raw, _ := json.Marshal(other)
+	task := NotificationTask{CLI: cli, Home: filepath.Join(home, "current"), Server: "alicerealm", Scope: "0123456789abcdef0123456789abcdef", AgentID: "current-agent", PrincipalID: "current-owner", Dispatch: true, PrepareOnly: true}
+	run := func(_ context.Context, program string, args ...string) ([]byte, error) {
+		if program == "/usr/bin/plutil" {
+			return raw, nil
+		}
+		if args[0] == "print-disabled" || args[0] == "print" && strings.Count(args[1], "/") == 1 {
+			return nil, nil
+		}
+		if args[0] == "print" {
+			return nil, launchctlTestExit(113)
+		}
+		t.Fatalf("unexpected mutation %s %v", program, args)
+		return nil, nil
+	}
+	r, err := startNotificationLaunchAgent(context.Background(), task, home, os.Getuid(), run)
+	if err != nil || r.Status != "task_stopped" {
+		t.Fatalf("other account blocked recovery: %+v %v", r, err)
+	}
+	after, _ := os.ReadFile(file)
+	if string(after) != "preserve" {
+		t.Fatal("other account changed")
+	}
+}
+
+func TestNotificationModeMigration(t *testing.T) {
+	for _, scenario := range []string{"direct", "wrapper", "prepare", "active", "active_prepare", "active_dispatch", "disabled", "disabled_os"} {
+		t.Run(scenario, func(t *testing.T) {
+			home := t.TempDir()
+			dir := filepath.Join(home, "Library", "LaunchAgents")
+			os.MkdirAll(dir, 0700)
+			cli := filepath.Join(home, "alicerealm")
+			os.WriteFile(cli, []byte("fixture"), 0700)
+			task := NotificationTask{CLI: cli, Home: home, Server: "alicerealm", Scope: strings.Repeat("a", 32), AgentID: "a", PrincipalID: "p", Dispatch: true, PrepareOnly: scenario == "prepare" || scenario == "active_prepare" || scenario == "active_dispatch"}
+			label := "ai.alicerealm.watch." + task.Scope
+			file := filepath.Join(dir, label+".plist")
+			os.WriteFile(file, []byte("preserve settings"), 0600)
+			args := []string{cli, "--homedir", home, "--server", "alicerealm", "watch", "--notifications-only"}
+			d := notificationLaunchDefinition{Label: label, ProgramArguments: args, Disabled: scenario == "disabled"}
+			if scenario == "active_dispatch" {
+				d.ProgramArguments[6] = "--dispatch"
+			}
+			wrapper := filepath.Join(home, "watch.sh")
+			source := "#!/bin/bash\nset -eu\nexport PATH='/usr/bin:/bin'\nexec '" + cli + "' --homedir '" + home + "' --server alicerealm watch --notifications-only\n"
+			if scenario == "wrapper" {
+				os.WriteFile(wrapper, []byte(source), 0700)
+				d.ProgramArguments = []string{"/bin/bash", wrapper}
+			}
+			raw, _ := json.Marshal(d)
+			loaded, started := true, strings.HasPrefix(scenario, "active")
+			var changes []string
+			run := func(_ context.Context, p string, a ...string) ([]byte, error) {
+				if p == "/usr/bin/plutil" {
+					if a[0] == "-convert" {
+						return raw, nil
+					}
+					if a[0] != "-replace" || a[1] != "ProgramArguments" || a[2] != "-json" || a[4] != file {
+						t.Fatalf("bad plist mutation %v", a)
+					}
+					var got []string
+					if json.Unmarshal([]byte(a[3]), &got) != nil || got[6] != "--dispatch" {
+						t.Fatalf("bad mode %v", a)
+					}
+					changes = append(changes, "mode")
+					return nil, nil
+				}
+				switch a[0] {
+				case "print-disabled":
+					if scenario == "disabled_os" {
+						return []byte(`"` + label + `" => true`), nil
+					}
+					return nil, nil
+				case "print":
+					if strings.Count(a[1], "/") == 1 {
+						return nil, nil
+					}
+					if !loaded {
+						return nil, launchctlTestExit(113)
+					}
+					if started {
+						return []byte("\tstate = running\n\tpid = 12345\n"), nil
+					}
+					return []byte("\tstate = waiting\n"), nil
+				case "bootout":
+					loaded, started = false, false
+				case "bootstrap":
+					loaded = true
+				case "kickstart":
+					started = true
+				default:
+					t.Fatalf("unexpected %v", a)
+				}
+				changes = append(changes, a[0])
+				return nil, nil
+			}
+			r, err := startNotificationLaunchAgent(context.Background(), task, home, os.Getuid(), run)
+			switch scenario {
+			case "active_dispatch":
+				if err == nil || len(changes) > 0 {
+					t.Fatalf("active changed: %+v %v %v", r, err, changes)
+				}
+			case "disabled", "disabled_os":
+				if err != nil || r.Status != "skipped_disabled" || len(changes) > 0 {
+					t.Fatalf("disabled changed: %+v %v %v", r, err, changes)
+				}
+			case "prepare", "active_prepare":
+				if err != nil || r.Status != "task_stopped" || strings.Join(changes, ",") != "bootout" {
+					t.Fatalf("prepare: %+v %v %v", r, err, changes)
+				}
+			default:
+				want := "bootout,mode,bootstrap,kickstart"
+				if scenario == "wrapper" {
+					want = "bootout,bootstrap,kickstart"
+					got, _ := os.ReadFile(wrapper)
+					if string(got) != strings.Replace(source, "--notifications-only", "--dispatch", 1) {
+						t.Fatalf("wrapper changed: %s", got)
+					}
+				}
+				if err != nil || r.PID != 12345 || strings.Join(changes, ",") != want {
+					t.Fatalf("migration: %+v %v %v", r, err, changes)
+				}
+			}
+			got, _ := os.ReadFile(file)
+			if string(got) != "preserve settings" {
+				t.Fatal("unrelated settings changed")
+			}
+		})
+	}
+}
+
+func TestNotificationPrepareWaitsForAsynchronousUnload(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, "Library", "LaunchAgents")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	cli := filepath.Join(home, "alicerealm")
+	if err := os.WriteFile(cli, []byte("fixture"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, "fixture.plist")
+	if err := os.WriteFile(file, []byte("preserve settings"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	task := NotificationTask{CLI: cli, Home: home, Server: "alicerealm", Scope: strings.Repeat("a", 32), AgentID: "a", PrincipalID: "p", PrepareOnly: true}
+	definition, _ := json.Marshal(notificationLaunchDefinition{Label: "ai.alicerealm.fixture", ProgramArguments: []string{cli, "--homedir", home, "--server", "alicerealm", "watch", "--notifications-only"}})
+	stopping, reads := false, 0
+	run := func(_ context.Context, program string, args ...string) ([]byte, error) {
+		if program == "/usr/bin/plutil" {
+			return definition, nil
+		}
+		if args[0] == "print-disabled" || (args[0] == "print" && strings.Count(args[1], "/") == 1) {
+			return nil, nil
+		}
+		switch args[0] {
+		case "bootout":
+			stopping = true
+		case "print":
+			if stopping {
+				reads++
+				if reads > 1 {
+					return nil, launchctlTestExit(113)
+				}
+				return []byte("\tstate = SIGTERMed\n\tpid = 12345\n"), nil
+			}
+			return []byte("\tstate = waiting\n"), nil
+		default:
+			t.Fatalf("unexpected mutation: %v", args)
+		}
+		return nil, nil
+	}
+	result, err := startNotificationLaunchAgent(context.Background(), task, home, os.Getuid(), run)
+	if err != nil || result.Status != "task_stopped" || reads != 2 {
+		t.Fatalf("prepare completed before unload: %+v reads=%d %v", result, reads, err)
+	}
+	if raw, _ := os.ReadFile(file); string(raw) != "preserve settings" {
+		t.Fatal("prepare rewrote task definition")
+	}
+}
+func TestOpaqueForeignPinnedWrapperDoesNotBlock(t *testing.T) {
+	for _, scenario := range []string{"foreign", "current", "unknown", "current_scope"} {
+		t.Run(scenario, func(t *testing.T) {
+			home := t.TempDir()
+			dir := filepath.Join(home, "Library", "LaunchAgents")
+			os.MkdirAll(dir, 0700)
+			cli := filepath.Join(home, "alicerealm")
+			os.WriteFile(cli, []byte("fixture"), 0700)
+			wrapper := filepath.Join(home, "old.sh")
+			source := "#!/bin/bash\nsource /tmp/test-source\nexec '" + cli + "' --homedir /other --server alicerealm watch --dispatch\n"
+			os.WriteFile(wrapper, []byte(source), 0700)
+			task := NotificationTask{CLI: cli, Home: home, Server: "alicerealm", Scope: strings.Repeat("b", 32), AgentID: "current", PrincipalID: "owner", Dispatch: true, PrepareOnly: true}
+			d := notificationLaunchDefinition{Label: "ai.alicerealm.other", ProgramArguments: []string{"/bin/bash", wrapper}, EnvironmentVariables: map[string]string{"ALICEREALM_WATCH_EXPECTED_AGENT": "other", "ALICEREALM_WATCH_EXPECTED_PRINCIPAL": "owner"}}
+			if scenario == "current" {
+				d.EnvironmentVariables["ALICEREALM_WATCH_EXPECTED_AGENT"] = "current"
+			}
+			if scenario == "unknown" {
+				d.EnvironmentVariables = nil
+			}
+			if scenario == "current_scope" {
+				d.Label = "ai.alicerealm.watch." + task.Scope
+			}
+			file := filepath.Join(dir, d.Label+".plist")
+			os.WriteFile(file, []byte("preserve"), 0600)
+			raw, _ := json.Marshal(d)
+			run := func(_ context.Context, p string, a ...string) ([]byte, error) {
+				if p == "/usr/bin/plutil" {
+					return raw, nil
+				}
+				if a[0] == "print-disabled" || a[0] == "print" && strings.Count(a[1], "/") == 1 {
+					return nil, nil
+				}
+				if a[0] == "print" {
+					return nil, launchctlTestExit(113)
+				}
+				t.Fatalf("unexpected mutation %s %v", p, a)
+				return nil, nil
+			}
+			r, err := startNotificationLaunchAgent(context.Background(), task, home, os.Getuid(), run)
+			if scenario == "foreign" {
+				if err != nil || r.Status != "task_stopped" {
+					t.Fatalf("foreign blocked: %+v %v", r, err)
+				}
+			} else if !errors.Is(err, errExistingAccountLauncher) {
+				t.Fatalf("unsafe current accepted: %+v %v", r, err)
+			}
+			got, _ := os.ReadFile(wrapper)
+			if string(got) != source {
+				t.Fatal("foreign wrapper changed")
+			}
+		})
+	}
+}

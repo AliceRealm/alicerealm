@@ -1,0 +1,197 @@
+#!/bin/bash
+set -e
+
+# ============================================================
+# build.sh - Cross-compile alicerealm CLI for all platforms
+# Usage: ./cli/scripts/build.sh
+# ============================================================
+
+SCRIPT_DIR="$(cd "$(dirname "$0")"; pwd)"
+CLI_DIR="$(cd "$SCRIPT_DIR/.."; pwd)"
+PROJECT_ROOT="$(cd "$CLI_DIR/.."; pwd)"
+BUILD_DIR="$PROJECT_ROOT/build/cli"
+
+source "$CLI_DIR/.cli.config"
+[[ -f "$CLI_DIR/.cli.env" ]] && source "$CLI_DIR/.cli.env"
+
+for version_name in CLI_VERSION NOTIFIER_VERSION; do
+  if [[ ! "${!version_name}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+    echo "$version_name must be a valid stable semantic version" >&2
+    exit 1
+  fi
+done
+
+if [[ -z "${ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY:-}" || -z "${ALICEREALM_SKILLS_SIGNING_KEY_FILE:-}" ]]; then
+  echo "ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY and ALICEREALM_SKILLS_SIGNING_KEY_FILE are required" >&2
+  exit 1
+fi
+
+CLI_COMMIT=$(git -C "$PROJECT_ROOT" rev-parse --short=8 HEAD 2>/dev/null || echo "unknown")
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+PLATFORMS=(
+  "linux/amd64"
+  "linux/arm64"
+  "darwin/amd64"
+  "darwin/arm64"
+  "windows/amd64"
+  "windows/arm64"
+)
+
+# Prefer project-pinned Go via mise when available.
+if command -v mise >/dev/null 2>&1 && [[ -f "$PROJECT_ROOT/mise.toml" ]]; then
+  GO_CMD=(mise exec -- go)
+else
+  GO_CMD=(go)
+fi
+
+DERIVED_SKILLS_PUBLIC_KEY=$(cd "$CLI_DIR" && "${GO_CMD[@]}" run ./cmd/manifestgen \
+  --print-public-key --signing-key-file "$ALICEREALM_SKILLS_SIGNING_KEY_FILE")
+if [[ "$DERIVED_SKILLS_PUBLIC_KEY" != "$ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY" ]]; then
+  echo "Skills signing key does not match ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY" >&2
+  exit 1
+fi
+
+rm -rf "$BUILD_DIR"
+mkdir -p "$BUILD_DIR"
+cp "$PROJECT_ROOT/static/uninstall.sh" "$PROJECT_ROOT/static/uninstall.ps1" "$BUILD_DIR/"
+
+echo -e "${CYAN}Building alicerealm CLI v${CLI_VERSION} (commit ${CLI_COMMIT})${NC}"
+echo ""
+
+failed=0
+cd "$CLI_DIR"
+
+compile_platform() {
+  local platform="$1" os arch bin_name
+  IFS='/' read -r os arch <<< "$platform"
+  bin_name="alicerealm-${os}-${arch}"
+  if [[ "$os" == "windows" ]]; then
+    bin_name="${bin_name}.exe"
+  fi
+  GOOS="$os" GOARCH="$arch" "${GO_CMD[@]}" build \
+    -ldflags "-X main.Version=${CLI_VERSION} -X main.Commit=${CLI_COMMIT} -X github.com/GardenVilla/alicerealm/cli/internal/skills.VerifyPublicKeyBase64=${ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY}" \
+    -o "$BUILD_DIR/$bin_name" . > "$BUILD_DIR/$bin_name.build.log" 2>&1
+}
+
+# Bounded batches work with macOS Bash 3.2; wait for every child, including failures.
+build_pids=()
+build_platforms=()
+wait_build_batch() {
+  local index platform bin_name
+  for index in "${!build_pids[@]}"; do
+    platform="${build_platforms[$index]}"
+    bin_name="alicerealm-${platform/\//-}"
+    [[ "$platform" != windows/* ]] || bin_name="${bin_name}.exe"
+    if wait "${build_pids[$index]}"; then
+      echo "Compiled $platform OK"
+    else
+      echo "Compilation FAILED: $platform" >&2
+      cat "$BUILD_DIR/$bin_name.build.log" >&2
+      failed=1
+    fi
+  done
+  build_pids=()
+  build_platforms=()
+}
+for platform in "${PLATFORMS[@]}"; do
+  compile_platform "$platform" &
+  build_pids+=("$!")
+  build_platforms+=("$platform")
+  if [[ ${#build_pids[@]} -eq 3 ]]; then
+    wait_build_batch
+  fi
+done
+wait_build_batch
+if [[ $failed -ne 0 ]]; then
+  echo 'Some platforms failed to compile; packaging stopped.' >&2
+  exit 1
+fi
+
+# Write version file for install.sh
+echo "$CLI_VERSION" > "$BUILD_DIR/version.txt"
+
+# ── Skills bundle (shipped on R2 alongside the binaries; `alicerealm skills sync`
+#    pulls it into each host's skill-load dir, so updating a skill is a CLI
+#    release, not a plugin republish). ───────────────────────────────────────
+SKILLS_SRC="$PROJECT_ROOT/skills"
+SKILLS_STAGE="$BUILD_DIR/skills-stage"
+# Discover every distributable official ar-* Skill from the source tree.
+SKILLS_ALLOWLIST=()
+while IFS= read -r _name; do [[ -n "$_name" ]] && SKILLS_ALLOWLIST+=("$_name"); done \
+  < <("${GO_CMD[@]}" run ./cmd/manifestgen --print-allowlist --skills-dir "$SKILLS_SRC")
+
+build_skills_bundle() {
+  # Deterministic archives require GNU tar's long flags; macOS bsdtar lacks them.
+  if ! command -v gtar >/dev/null 2>&1; then
+    echo -e "${RED}gtar (GNU tar) required for deterministic skills archives.${NC}"
+    echo -e "${RED}  macOS: brew install gnu-tar   Debian/Ubuntu: apt install tar${NC}"
+    exit 1
+  fi
+  if [[ ${#SKILLS_ALLOWLIST[@]} -eq 0 ]]; then
+    echo -e "${RED}skills allowlist empty — manifestgen --print-allowlist failed${NC}"
+    exit 1
+  fi
+  rm -rf "$SKILLS_STAGE"
+  mkdir -p "$SKILLS_STAGE"
+  for name in "${SKILLS_ALLOWLIST[@]}"; do
+    local src="$SKILLS_SRC/$name"
+    if [[ ! -f "$src/SKILL.md" ]]; then
+      echo -e "${RED}skills bundle: missing $name/SKILL.md in $SKILLS_SRC${NC}"
+      exit 1
+    fi
+    # Symlinks make dirSHA256 non-deterministic across machines; reject at source.
+    if find "$src" -type l | grep -q .; then
+      echo -e "${RED}skills bundle: $name contains symlink(s); not allowed${NC}"
+      exit 1
+    fi
+    cp -R "$src" "$SKILLS_STAGE/$name"
+  done
+  find "$SKILLS_STAGE" \( -name '.DS_Store' -o -name '._*' \) -delete
+  ( cd "$SKILLS_STAGE" && gtar \
+      --sort=name --mtime='UTC 2020-01-01' \
+      --owner=0 --group=0 --numeric-owner \
+      --exclude='.DS_Store' --exclude='._*' \
+      -czf "$BUILD_DIR/skills.tar.gz" . )
+  ( cd "$BUILD_DIR" && shasum -a 256 skills.tar.gz | awk '{print $1}' > skills.tar.gz.sha256 )
+  "${GO_CMD[@]}" run ./cmd/manifestgen \
+    --skills-dir "$SKILLS_STAGE" --cli-version "$CLI_VERSION" \
+    --min-cli-version "${SKILLS_MIN_CLI_VERSION:-}" \
+    --sequence "${SKILLS_SEQUENCE}" \
+    --signing-key-file "${ALICEREALM_SKILLS_SIGNING_KEY_FILE}" \
+    --tarball "$BUILD_DIR/skills.tar.gz" --out "$BUILD_DIR/manifest.json"
+  rm -rf "$SKILLS_STAGE"
+  echo -e "${GREEN}Skills bundle → skills.tar.gz / .sha256 / manifest.json${NC}"
+}
+build_skills_bundle
+
+echo ""
+if [[ $failed -eq 0 ]]; then
+  # Go cross-compilation cannot build the native macOS notification helper.
+  HELPERS_DIR="${ALICEREALM_NOTIFIER_HELPERS_DIR:-$BUILD_DIR/helpers}"
+  if [[ -z "${ALICEREALM_NOTIFIER_HELPERS_DIR:-}" ]]; then
+    if [[ "$(uname -s)" != Darwin ]]; then
+      echo 'Provide ALICEREALM_NOTIFIER_HELPERS_DIR built on macOS for complete CLI packages.' >&2
+      exit 1
+    fi
+    for arch in amd64 arm64; do
+      ALICEREALM_NOTIFIER_VERSION="$NOTIFIER_VERSION" bash "$SCRIPT_DIR/build-notifier-macos.sh" "$HELPERS_DIR/darwin-$arch" "$arch"
+    done
+  fi
+  if [[ -n "${ALICEREALM_NOTARY_PROFILE:-}" && "${ALICEREALM_NOTIFIER_REUSE:-0}" != 1 ]]; then
+    bash "$SCRIPT_DIR/notarize-notifier-macos.sh" "$HELPERS_DIR"
+  fi
+  python3 "$SCRIPT_DIR/cli-packages.py" generate "$BUILD_DIR" --helpers "$HELPERS_DIR"
+  python3 "$SCRIPT_DIR/cli-artifacts.py" generate "$BUILD_DIR"
+  "${GO_CMD[@]}" run ./cmd/clirelease --dir "$BUILD_DIR" --version "$CLI_VERSION" --notifier-version "$NOTIFIER_VERSION" \
+    --signing-key-file "$ALICEREALM_SKILLS_SIGNING_KEY_FILE"
+  echo -e "${GREEN}All platforms compiled → build/cli/${NC}"
+  ls -lh "$BUILD_DIR"
+else
+  echo -e "${RED}Some platforms failed to compile${NC}"
+  exit 1
+fi

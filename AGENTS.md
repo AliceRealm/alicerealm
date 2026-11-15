@@ -1,0 +1,146 @@
+# AGENTS.md - AliceRealm Server Development Guidelines
+
+## Project Overview
+
+Agent-oriented information distribution platform, built with Go and CloudWeGo microservices architecture. Read `docs/architecture_overview.md` before modifying code.
+
+## Development Environment
+
+- Go 1.25+
+- Infrastructure: `docker compose up -d` (PostgreSQL, Redis, etcd, Elasticsearch, Kibana)
+- Monitoring (optional): the full stack (Jaeger, Loki, Grafana, Prometheus, dashboards, alerting) lives in the private `GardenVilla/alicerealm-observability` repository — clone it and follow its README for local start. Then set `MONITOR_ENABLED=true` in `.env`. Application-side instrumentation (metrics/tracing code) stays in this repository.
+- Default connection config in `pkg/config/config.go`, override via environment variables
+- Build: `bash scripts/common/build.sh` (core), `./console/console_api/scripts/build.sh` (console)
+- Start: `./scripts/local/start_local.sh` (core), `./console/console_api/scripts/start.sh` (console)
+- Root-module tests: `./tests/run.sh` (starts local services and runs `go test -v ./...`)
+- CLI, Console API, and Console Web tests have separate commands in `docs/dev/testing.md`.
+
+## Directory Responsibilities
+
+| Directory | Responsibility | Notes |
+|-----------|---------------|-------|
+| `api/` | HTTP Gateway | Hertz-based API gateway (port 8080). hz-generated code in `handler_gen/`, `router_gen/`, `model/`. RPC clients in `clients/`. Swagger docs in `docs/` |
+| `console/` | Console subsystem | Independent Go module (`alicerealm.com`). Own IDL, codegen, DAL, and build workflow. API (port 8090) and Web UI (Vite + Refine + Ant Design). Must not import root module packages |
+| `rpc/*/` | RPC services | Kitex-based microservices (auth, profile, item, sort, feed, pm, notification). Business logic in `handler.go`, data access in `dal/`. Sort owns item recall, ranking, reranking, and feed ordering. |
+| `pipeline/` | Async processing | LLM consumers (`consumer/`), embedding client (`embedding/`), scheduled tasks (`cron/`: stats calibration, embedding backfill) |
+| `ws/` | WebSocket push | Hertz-based WebSocket server (port 8088). Real-time PM push via Redis Pub/Sub |
+| `replay/` | Offline replay | Hertz-based replay service (port 8092). Simulates sort pipeline with custom params and time for offline evaluation. Network-isolated, no auth |
+| `cli/` | CLI tool | Independent Go module (`cli.eigenflux.ai`). Cobra-based CLI wrapping all HTTP API endpoints. Own go.mod, build scripts. Must not import root module packages |
+| `pkg/` | Shared libraries | cache, impr, idgen, es, mq, email, logger, validator, stats, milestone, reqinfo, rpcx, audience, dedup, telemetry |
+| `idl/` | Thrift IDL | RPC contracts and API definitions. Console IDL in `console/console_api/idl/` |
+| `kitex_gen/` | Auto-generated | **DO NOT manually modify**. Regenerate after IDL changes |
+
+All project documentation must be written in English.
+
+## Module Documentation (`docs/dev/`)
+
+Read the relevant module doc before modifying that area:
+
+| Module doc | Covers |
+|------------|--------|
+| `conventions.md` | API response format, ID conventions, data models (RawItem, ProcessedItem), coding standards |
+| `idl_and_db.md` | IDL modification workflow (kitex/hz), hz tool constraints, database migration scripts |
+| `pipeline.md` | Async messaging (Redis Streams), 12-step item processing flow, replay log, embedding config, LLM |
+| `feed_and_cache.md` | Feed flow, impression recording, 5-level cache architecture, cache config and testing |
+| `auth.md` | Authentication flow, OTP, security mechanisms, mock OTP whitelist |
+| `notification.md` | Notification service DAL, Redis keys, delivery dedup, audience expressions |
+| `api_endpoints.md` | Gateway API endpoints, installation entry, Swagger, feed `output_contract` delivery |
+| `configuration.md` | Service ports table, environment variables, startup constraints |
+| `console.md` | Console build/start, directory structure, API endpoints, frontend dev |
+| `pm.md` | PM service methods, conversation types, friend/block relations, WebSocket push |
+| `agent-dispatch.md` | Local Agent binding, dispatch operation, packaging, and manual acceptance; implementation map in `cli/internal/dispatch/README.md` |
+| `infra.md` | Distributed tracing (Jaeger/Loki/Grafana), logging convention, RPC bootstrap (`pkg/rpcx`) |
+| `testing.md` | Test directories, run commands, manual email integration |
+| `discovery.md` | Three-kind search/recommendation, Need contexts, typed samples, projections and cutover |
+| `sort.md` | Sort service responsibilities, item recall, ranking, reranking, and feed ordering |
+| `commission.md` | Commission ownership boundary, the Alipay-only funding channel, and where every surface discloses it |
+| `rerank.md` | Item candidate contract and active freshness, boost, injection, and source-limit policies |
+
+# IMPORTANT
+
+## Agent Runtime Fields
+
+- Agent Card `runtime` and the Home Discovery `runtime` alias are deprecated compatibility fields. Do not add new consumers or use them as Agent product identity.
+- Use `runtime_name` and `runtime_version` for the reported product; use `runtime_mode` (Card) or `mode` (settings) for integration mode. Carry these fields through new response DTOs instead of copying legacy `runtime`.
+- Keep unknown product or mode values unknown. Never infer a product from a mode, default it to OpenClaw, or use a CLI/plugin version as the product version.
+- Preserve the deprecated wire field until its consumers migrate. This deprecation does not apply to runtime leases, heartbeat routes, `runtime_state`, or `runtime_instance_id`.
+- Follow [the runtime field contract](docs/dev/api_endpoints.md#agent-card-runtime-identity).
+- Use `model` for the latest Agent-reported model in settings and `agent_settings.model` in storage, supplied through `X-Client-Model`. Keep current model evidence distinct from configured defaults and historical settings; do not introduce `model_name` aliases for Agent runtime reporting.
+
+## Production Deployment
+
+`aliap` and `/data/git/eigenflux` are deployment-only. They are never a development workspace or a source of truth.
+
+- Never edit source files, create a branch, commit, stash, or push from `aliap`.
+- Every change must be developed in a local worktree created from the latest `origin/main`, verified locally, committed, pushed to a feature branch, reviewed in a pull request, and merged into `main` before deployment.
+- Deploy only the resulting `main` commit. Never deploy an uncommitted worktree, a feature branch, or a commit that is not contained in `origin/main`.
+- Before any deployment on `aliap`, read `/etc/eigenflux/DEPLOYMENT_POLICY.md` and require `git status --short` to be empty. If the production worktree is dirty, stop. Archive the changes, migrate them to a local worktree, and use the normal PR workflow; do not repair or commit them in place.
+- The only permitted Git update on `aliap` is a read-only fetch followed by a fast-forward to `origin/main`. Verify the deployed SHA, migrations, service health, and a clean worktree after deployment.
+- Production console deployment is managed separately and must not be inferred from a backend deployment.
+
+## Build and Testing
+
+After each code change, add or modify test cases. Run build and e2e tests to ensure functionality works.
+
+- Keep unit tests beside the package they exercise; service integration suites and their shared helpers live in `tests/`.
+- Don't add degradation logic just to make tests pass. Let humans handle errors that can't be handled
+- Build and tool scripts go in `scripts`
+- Build artifacts must go in `build/` directory, never in source directories. Always use `-o build/<name>` when running `go build` manually (e.g. `go build -o build/auth ./rpc/auth/`). Use `bash scripts/common/build.sh` for core services and `./console/console_api/scripts/build.sh` for console
+- **Run build, start services, and tests autonomously.** All local dev scripts are idempotent and safe. Execute them directly without asking
+- CLI: `./cli/scripts/build.sh` (cross-compile), `./cli/scripts/install-local.sh` (local install)
+
+## Documentation Updates
+
+After each code change, check if documentation needs updating, especially README.md and CLAUDE.md (including module docs under `docs/dev/`). Use clear and explicit language describing the current latest state. No process descriptions needed — git history can be queried.
+
+### CLI Agent dispatch: required implementation documentation
+
+Read [the implementation map](cli/internal/dispatch/README.md) before changing
+`cli/internal/dispatch/`, `cli/cmd/watch*.go`, heartbeat dispatch ownership, or
+associated Skills/capability logic. Update its affected sections in the same
+change; missing documentation makes the change incomplete. Update the operator
+guide and synchronized Skills when their respective behavior changes.
+
+## Locking
+
+Avoid adding locks by default, especially implementations that delete lock files: Agent host permissions may prevent deletion and block lock release. When a file lock is necessary, use an OS-backed lock, retain the file after release, and set a bounded wait.
+
+## Code Cleanup
+
+- Never comment out old code — delete it completely
+- Never leave comments explaining what old code used to be
+- Rely on version control to trace history
+- Don't leave dead code or unused imports. Preserve explicit compatibility deprecations until their consumers migrate.
+
+## Agent skills
+
+Before modifying any file under `skills/`, read and follow [skills/AGENTS.md](skills/AGENTS.md).
+
+### Issue tracker
+
+Issues tracked in GitHub Issues (`GardenVilla/alicerealm`) via the `gh` CLI; external PRs are not a triage surface. Follow [Issue Reporting](CONTRIBUTING.md#issue-reporting) for report contents and security reporting.
+
+### Triage labels
+
+Default label vocabulary: needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix.
+
+### Domain docs
+
+Use [Architecture Overview](docs/architecture_overview.md) for system context and the relevant `docs/dev/` entry in Module Documentation above for area-specific contracts and workflows.
+
+## Host adapter boundary
+
+Keep shared runtime decisions, authentication error handling, and account-scoped
+maintenance state in the CLI. Keep Agent behavior in dynamically synchronized
+Skills. Host plugins call the CLI and deliver its plan, task, and error output;
+they own host scheduling, process lifecycle, context collection, and routing.
+Preserve existing consumers when changing command output contracts.
+
+## Important monitoring releases
+
+For important server behavior or instrumentation changes affecting a Grafana
+chart, include a declaration in `deploy/release-events.json` in the same PR.
+Read [release annotations](docs/dev/release-annotations.md): use the affected
+chart, explain the data coverage boundary, and distinguish API-only from full
+rollouts. The deployer supplies the actual healthy deployment time; never fill
+it with a merge time. Routine changes need no marker.

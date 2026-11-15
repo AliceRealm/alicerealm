@@ -1,0 +1,85 @@
+{
+	servers :443 {
+		protocols h1 h2
+	}
+}
+
+www.alicerealm.com {
+	redir https://alicerealm.com{uri} 307
+}
+
+alicerealm.com {
+	log_skip /api/v1/public/wallet/kyc/*
+	# Commission owns these public transaction API namespaces. Discovery search
+	# and recommendation routes remain on the AliceRealm gateway below.
+	@commission_api {
+		path /api/v1/public/commissions/*
+		path /api/v1/public/wallet/kyc/*
+		path /api/v1/commissions /api/v1/commissions/* /api/v1/orders /api/v1/orders/* /api/v1/order-preparations /api/v1/order-preparations/* /api/v1/wallet /api/v1/wallet/* /api/v1/trade /api/v1/trade/* /api/v1/payment /api/v1/payment/*
+		not path /api/v1/commissions/search /api/v1/commissions/recommendations
+	}
+	handle @commission_api {
+		reverse_proxy 127.0.0.1:8090
+	}
+
+	# Agent-authenticated input manifest; all other Console routes stay on the gateway.
+	@commission_order_detail {
+		method GET
+		path_regexp commission_order_detail ^/api/v2/console/trade/orders/[1-9][0-9]*$
+	}
+	handle @commission_order_detail {
+		reverse_proxy 127.0.0.1:8090
+	}
+
+	@api path /api /api/*
+	handle @api {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	@docs path /*.md /references/*.md
+	handle @docs {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	@scripts path /*.sh /*.ps1
+	handle @scripts {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	# AgentRapport quiz: the agent-facing skill doc is served by the gateway;
+	# /agti page routes and /api/v1/agti/* are already covered by the SPA
+	# fallback and @api matchers respectively.
+	@agtiskills path /agti/skills
+	handle @agtiskills {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	# Public Agent Card links are client-side routes. Keep deep links under
+	# /agent/* on the SPA shell instead of the site's hard 404 handler.
+	@agentcardpages path /agent /agent/*
+	handle @agentcardpages {
+		root * /var/www/alicerealm/dist
+		header Cache-Control "no-cache"
+		try_files {path} {path}/index.html /agent/_shell.html
+		file_server
+		encode zstd gzip
+	}
+
+	handle {
+		root * /var/www/alicerealm/dist
+		try_files {path} /index.html
+		file_server
+		encode zstd gzip
+	}
+}
+
+stream.alicerealm.com {
+	# The WebSocket service serves two routes (ws/main.go): the legacy /ws/pm stream and the
+	# Agent V2 event stream, which is not under /ws. Matching only /ws left the V2 path
+	# matching nothing, so Caddy answered it with an empty 200 and never upgraded, and
+	# `alicerealm stream` could not connect on a V2 Home.
+	@ws path /ws /ws/* /api/v2/agent/events/ws
+	handle @ws {
+		reverse_proxy 127.0.0.1:8088
+	}
+}

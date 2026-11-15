@@ -1,0 +1,687 @@
+package cmd
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptrace"
+	"net/url"
+	"os"
+	"os/signal"
+	"sort"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
+	"github.com/GardenVilla/alicerealm/cli/internal/auth"
+	"github.com/GardenVilla/alicerealm/cli/internal/cache"
+	"github.com/GardenVilla/alicerealm/cli/internal/client"
+	"github.com/GardenVilla/alicerealm/cli/internal/config"
+	"github.com/GardenVilla/alicerealm/cli/internal/output"
+
+	"github.com/gorilla/websocket"
+	"github.com/spf13/cobra"
+)
+
+const (
+	pongWait     = 45 * time.Second
+	writeWait    = 10 * time.Second
+	reconnectMin = 5 * time.Second
+	reconnectMax = 120 * time.Second
+	reconnectMul = 2.0
+)
+
+var errStreamUnauthorized = errors.New("stream authentication rejected")
+
+var streamAccessRetryDelay = reconnectMax
+
+// Match the proactive refresh window used by ensureV2Credentials. A minimum
+// delay avoids a tight reconnect loop if a server returns a short-lived token.
+func streamCredentialRefreshDelay(credentials *auth.V2Credentials, now time.Time) time.Duration {
+	delay := time.UnixMilli(credentials.ExpiresAt).Sub(now) - 30*time.Second
+	if delay < time.Second {
+		return time.Second
+	}
+	return delay
+}
+
+type streamDialer interface {
+	Dial(string, http.Header) (*websocket.Conn, *http.Response, error)
+}
+
+type contextStreamDialer struct {
+	ctx context.Context
+	*websocket.Dialer
+}
+
+func (d contextStreamDialer) Dial(rawURL string, headers http.Header) (*websocket.Conn, *http.Response, error) {
+	// Gorilla applies the context deadline to the handshake but does not close
+	// an established socket when that context is canceled before the upgrade.
+	stopCancel := func() bool { return false }
+	ctx := httptrace.WithClientTrace(d.ctx, &httptrace.ClientTrace{GotConn: func(info httptrace.GotConnInfo) {
+		stopCancel = context.AfterFunc(d.ctx, func() { info.Conn.Close() })
+	}})
+	conn, response, err := d.Dialer.DialContext(ctx, rawURL, headers)
+	stopCancel()
+	if d.ctx.Err() != nil {
+		if conn != nil {
+			conn.Close()
+		}
+		return nil, response, d.ctx.Err()
+	}
+	return conn, response, err
+}
+
+func streamHandshakeError(response *http.Response, fallback error) error {
+	if response == nil {
+		return fallback
+	}
+	var body []byte
+	if response.Body != nil {
+		body, _ = io.ReadAll(io.LimitReader(response.Body, 16<<10))
+		_ = response.Body.Close()
+	}
+	if response.StatusCode >= 400 {
+		return client.DecodeAPIError(response.StatusCode, response.Header, body)
+	}
+	return fallback
+}
+
+func dialStreamWithCredentialRefresh(dialer streamDialer, rawURL string, headers http.Header, currentAgentID string, refresh func() (*auth.V2Credentials, error)) (*websocket.Conn, *auth.V2Credentials, bool, error) {
+	conn, response, err := dialer.Dial(rawURL, headers)
+	if err == nil {
+		return conn, nil, false, nil
+	}
+	unauthorized := response != nil && response.StatusCode == http.StatusUnauthorized
+	err = streamHandshakeError(response, err)
+	if !unauthorized {
+		return nil, nil, false, err
+	}
+	if refresh == nil {
+		return nil, nil, false, fmt.Errorf("%w: %w", errStreamUnauthorized, err)
+	}
+	credentials, refreshErr := refresh()
+	if refreshErr != nil {
+		return nil, nil, true, refreshErr
+	}
+	if credentials == nil || credentials.AccessToken == "" || credentials.AgentID == "" {
+		return nil, nil, true, fmt.Errorf("credential refresh returned an incomplete identity")
+	}
+	retryHeaders := headers.Clone()
+	retryHeaders.Set("Authorization", "Bearer "+credentials.AccessToken)
+	retryURL := rawURL
+	if currentAgentID != "" && credentials.AgentID != currentAgentID {
+		if parsed, parseErr := url.Parse(rawURL); parseErr == nil {
+			query := parsed.Query()
+			query.Del("cursor")
+			parsed.RawQuery = query.Encode()
+			retryURL = parsed.String()
+		}
+	}
+	conn, response, err = dialer.Dial(retryURL, retryHeaders)
+	if err != nil {
+		err = streamHandshakeError(response, err)
+	}
+	if err != nil && response != nil && response.StatusCode == http.StatusUnauthorized {
+		return nil, credentials, true, fmt.Errorf("%w after credential refresh: %w", errStreamUnauthorized, err)
+	}
+	return conn, credentials, true, err
+}
+
+var streamCmd = &cobra.Command{
+	Use:   "stream",
+	Short: "Stream real-time PM push updates via WebSocket",
+	Long: `Connect to the AliceRealm stream service and print incoming private
+message push events as newline-delimited JSON to stdout.
+
+The command runs until interrupted (Ctrl-C). Automatically reconnects
+on connection loss with exponential backoff.
+
+Examples:
+  alicerealm stream
+  alicerealm stream --cursor 123456789
+  alicerealm stream --format json`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		cursor, _ := cmd.Flags().GetString("cursor")
+		// --once: connect, print the first packet (which replays all offline
+		// unread history), then exit. For cold-spawn hosts (codex/gemini/…) that
+		// drain offline PMs at session start instead of holding a stream open.
+		once, _ := cmd.Flags().GetBool("once")
+
+		cfg, err := config.Load()
+		if err != nil {
+			return fmt.Errorf("load config: %w", err)
+		}
+		srv, err := cfg.GetActive(serverFlag)
+		if err != nil {
+			return err
+		}
+		hasV2, err := auth.HasV2Credentials(srv.Name)
+		if err != nil {
+			return unavailableV2Identity(fmt.Errorf("inspect Agent V2 credentials: %w", err))
+		}
+		accessToken := ""
+		activeAgentID := ""
+		var activeCredentials *auth.V2Credentials
+		streamPath := "/ws/pm"
+		var notificationClient *client.Client
+		if hasV2 {
+			credentials, credentialErr := ensureV2Credentials(srv.Name, srv.Endpoint)
+			if credentialErr != nil {
+				return credentialErr
+			}
+			activeCredentials = credentials
+			accessToken = credentials.AccessToken
+			activeAgentID = credentials.AgentID
+			streamPath = "/api/v2/agent/events/ws"
+			notificationClient, _, err = newV2ClientForServer(srv.Name, true)
+			if err != nil {
+				return fmt.Errorf("initialize notification client: %w", err)
+			}
+		} else {
+			credentials, credentialErr := auth.LoadCredentials(srv.Name)
+			if credentialErr != nil {
+				output.Die(output.ExitAuthRequired, "not logged in to server %q — preserve this Agent Home; use ar-profile for existing-account recovery or ar-onboarding for an explicitly requested new connection", srv.Name)
+			}
+			if credentials.IsExpired() {
+				output.Die(output.ExitAuthRequired, "token expired for server %q — preserve this Agent Home and use ar-profile for credential refresh or account recovery", srv.Name)
+			}
+			accessToken = credentials.AccessToken
+		}
+
+		wsBase := srv.WSBaseURL()
+		if wsBase == "" {
+			return fmt.Errorf("cannot determine WebSocket URL for server %q — set --stream-endpoint via 'server update'", srv.Name)
+		}
+
+		// PM save needs our own agent_id in profile.json to pick the
+		// counterpart for the file name. Fetch it once up-front so the
+		// first push lands in the right file.
+		ensureProfileCached(srv.Name)
+		myProfile, _ := cache.LoadProfile(srv.Name)
+		myAgentID := ""
+		if myProfile != nil {
+			myAgentID = myProfile.AgentID
+		}
+		language := "en"
+		if normalized, ok := normalizeAccountLanguage(cfg.GetKV("lang")); ok {
+			language = normalized
+		}
+
+		// Track latest cursor for reconnect resume.
+		var mu sync.Mutex
+		lastCursor := cursor
+
+		backoff := reconnectMin
+
+		for {
+			if ctx.Err() != nil {
+				return nil
+			}
+			if hasV2 {
+				credentials, credentialErr := ensureV2Credentials(srv.Name, srv.Endpoint)
+				if credentialErr != nil {
+					return credentialErr
+				}
+				if activeAgentID != "" && activeAgentID != credentials.AgentID {
+					mu.Lock()
+					lastCursor = ""
+					mu.Unlock()
+				}
+				activeCredentials = credentials
+				accessToken = credentials.AccessToken
+				activeAgentID = credentials.AgentID
+				myAgentID = credentials.AgentID
+			}
+			mu.Lock()
+			curCursor := lastCursor
+			mu.Unlock()
+
+			u, err := url.Parse(wsBase + streamPath)
+			if err != nil {
+				return fmt.Errorf("invalid stream URL: %w", err)
+			}
+			q := u.Query()
+			if !hasV2 {
+				q.Set("token", accessToken)
+			}
+			if curCursor != "" {
+				q.Set("cursor", curCursor)
+			}
+			u.RawQuery = q.Encode()
+
+			output.PrintMessage("Connecting to %s ...", wsBase)
+
+			dialHeaders := http.Header{}
+			if hasV2 {
+				dialHeaders.Set("Authorization", "Bearer "+accessToken)
+			}
+			if version != "" {
+				dialHeaders.Set("X-CLI-Ver", version)
+			}
+			clientMeta.SetHeaders(dialHeaders)
+			var refresh func() (*auth.V2Credentials, error)
+			if hasV2 {
+				refresh = func() (*auth.V2Credentials, error) {
+					return refreshV2CredentialsAfterUnauthorized(srv.Name, srv.Endpoint, accessToken)
+				}
+			}
+			conn, refreshedCredentials, refreshAttempted, dialErr := dialStreamWithCredentialRefresh(contextStreamDialer{ctx, websocket.DefaultDialer}, u.String(), dialHeaders, activeAgentID, refresh)
+			if refreshedCredentials != nil {
+				if activeAgentID != "" && activeAgentID != refreshedCredentials.AgentID {
+					mu.Lock()
+					lastCursor = ""
+					mu.Unlock()
+				}
+				activeCredentials = refreshedCredentials
+				accessToken = refreshedCredentials.AccessToken
+				activeAgentID = refreshedCredentials.AgentID
+				myAgentID = refreshedCredentials.AgentID
+			}
+			if dialErr != nil {
+				var apiErr *client.APIError
+				if errors.As(dialErr, &apiErr) &&
+					((apiErr.StatusCode == http.StatusConflict && apiErr.ErrorCode == "ONBOARDING_REQUIRED") ||
+						(apiErr.StatusCode == http.StatusForbidden && apiErr.ErrorCode == "AGENT_SCOPE_REQUIRED")) {
+					if once {
+						return fmt.Errorf("connect failed: %w", dialErr)
+					}
+					select {
+					case <-time.After(streamAccessRetryDelay):
+						continue
+					case <-ctx.Done():
+						return nil
+					}
+				}
+				if refreshAttempted && refreshedCredentials == nil {
+					return fmt.Errorf("Agent V2 stream credential refresh failed: %w", dialErr)
+				}
+				if errors.Is(dialErr, errStreamUnauthorized) {
+					return fmt.Errorf("Agent V2 stream credentials were rejected after one refresh: %w", dialErr)
+				}
+				if once {
+					return fmt.Errorf("connect failed: %w", dialErr)
+				}
+				output.PrintMessage("Connect failed: %v, retrying in %s...", dialErr, backoff)
+				select {
+				case <-time.After(backoff):
+					backoff = time.Duration(float64(backoff) * reconnectMul)
+					if backoff > reconnectMax {
+						backoff = reconnectMax
+					}
+					continue
+				case <-ctx.Done():
+					return nil
+				}
+			}
+
+			// Connected — reset backoff.
+			backoff = reconnectMin
+			output.PrintMessage("Connected. Streaming PM updates (Ctrl-C to stop)...")
+
+			conn.SetReadDeadline(time.Now().Add(pongWait))
+			conn.SetPingHandler(func(string) error {
+				conn.SetReadDeadline(time.Now().Add(pongWait))
+				return conn.WriteControl(websocket.PongMessage, nil, time.Now().Add(writeWait))
+			})
+
+			var refreshTimer *time.Timer
+			var refreshDue <-chan time.Time
+			if hasV2 && !once {
+				refreshTimer = time.NewTimer(streamCredentialRefreshDelay(activeCredentials, time.Now()))
+				refreshDue = refreshTimer.C
+			}
+			stopRefreshTimer := func() {
+				if refreshTimer != nil {
+					refreshTimer.Stop()
+				}
+			}
+			stopping := make(chan struct{})
+			done := make(chan struct{})
+			shouldReconnect := true
+			var processingErr error
+			format := resolveFormat()
+
+			go func() {
+				defer close(done)
+				firstPacket := true
+				for {
+					_, msg, err := conn.ReadMessage()
+					if err != nil {
+						select {
+						case <-stopping:
+							return
+						default:
+						}
+						if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
+							output.PrintMessage("Connection closed normally")
+							shouldReconnect = false
+						} else if closeErr, ok := err.(*websocket.CloseError); ok && closeErr.Code == 4002 {
+							output.PrintMessage("Connection replaced by another session")
+							shouldReconnect = false
+						} else {
+							output.PrintMessage("Connection lost: %v", err)
+						}
+						if once {
+							// One-shot mode: never reconnect, even on a transient drop.
+							shouldReconnect = false
+						}
+						return
+					}
+
+					// Update cursor from message for reconnect resume.
+					var envelope struct {
+						Data struct {
+							NextCursor string `json:"next_cursor"`
+						} `json:"data"`
+					}
+					if json.Unmarshal(msg, &envelope) == nil && envelope.Data.NextCursor != "" {
+						mu.Lock()
+						lastCursor = envelope.Data.NextCursor
+						mu.Unlock()
+					}
+					var push struct {
+						Type string          `json:"type"`
+						Data json.RawMessage `json:"data"`
+					}
+					pushOK := json.Unmarshal(msg, &push) == nil
+					if pushOK && push.Type == "pm_push" {
+						cacheMessages(push.Data)
+					}
+					if pushOK && push.Type == "notification_push" {
+						if err := drainCommissionNotifications(notificationClient, format, language, os.Stdout); err != nil {
+							output.PrintMessage("Commission notification processing failed: %v", err)
+							if once {
+								processingErr = err
+							}
+						}
+						if once {
+							shouldReconnect = false
+							return
+						}
+						continue
+					}
+
+					if format == "json" {
+						fmt.Fprintln(os.Stdout, string(msg))
+						if once {
+							if err := drainCommissionNotifications(notificationClient, format, language, os.Stdout); err != nil {
+								output.PrintMessage("Commission notification processing failed: %v", err)
+								processingErr = err
+							}
+							// --once: the first packet (offline history replay)
+							// has been emitted; exit. JSON mode doesn't track
+							// firstPacket, but the first message IS the backlog
+							// packet, so emit-then-exit is correct. Without this,
+							// cold-spawn hosts (non-TTY => json) would never exit.
+							shouldReconnect = false
+							return
+						}
+					} else {
+						if !pushOK {
+							fmt.Fprintln(os.Stdout, string(msg))
+							continue
+						}
+						if push.Type == "friend_accepted" || push.Type == "friend_rejected" {
+							var fa struct {
+								FriendUID       string `json:"friend_uid"`
+								PeerShortID     string `json:"peer_short_id"`
+								PeerDisplayName string `json:"peer_display_name"`
+							}
+							if json.Unmarshal(push.Data, &fa) == nil {
+								peer := publicPeerLabel(fa.PeerDisplayName, fa.PeerShortID, fa.FriendUID)
+								if push.Type == "friend_accepted" {
+									fmt.Fprintf(os.Stdout, "✓ Friend request accepted — you are now friends with %s\n", safeInline(peer))
+								} else {
+									fmt.Fprintf(os.Stdout, "Friend request declined by %s\n", safeInline(peer))
+								}
+							} else {
+								fmt.Fprintln(os.Stdout, string(msg))
+							}
+							continue
+						}
+						var data struct {
+							Messages       []streamMsg `json:"messages"`
+							History        []streamMsg `json:"history_messages"`
+							FriendRequests []struct {
+								RequestID       string `json:"request_id"`
+								FromUID         string `json:"from_uid"`
+								FromName        string `json:"from_name"`
+								FromShortID     string `json:"from_short_id"`
+								FromDisplayName string `json:"from_display_name"`
+								Greeting        string `json:"greeting"`
+								CreatedAt       int64  `json:"created_at"`
+								FromIsOfficial  bool   `json:"from_is_official"`
+							} `json:"friend_requests"`
+							FriendRequestsHasMore bool `json:"friend_requests_has_more"`
+						}
+						if err := json.Unmarshal(push.Data, &data); err != nil {
+							fmt.Fprintln(os.Stdout, string(msg))
+							continue
+						}
+
+						if firstPacket {
+							if len(data.History) > 0 {
+								fmt.Fprintf(os.Stdout, "--- recent history (%d messages) ---\n", len(data.History))
+								sort.Slice(data.History, func(i, j int) bool {
+									return data.History[i].CreatedAt < data.History[j].CreatedAt
+								})
+								for _, m := range data.History {
+									printHistoryLine(m, myAgentID)
+								}
+							}
+							if len(data.FriendRequests) > 0 {
+								label := fmt.Sprintf("%d shown", len(data.FriendRequests))
+								if data.FriendRequestsHasMore {
+									label = fmt.Sprintf("%d shown, more pending — see /relations/applications", len(data.FriendRequests))
+								}
+								fmt.Fprintf(os.Stdout, "--- pending friend requests (%s) ---\n", label)
+								for _, fr := range data.FriendRequests {
+									ts := time.UnixMilli(fr.CreatedAt).Format("15:04:05")
+									who := publicPeerLabel(fr.FromDisplayName, fr.FromShortID, fr.FromUID)
+									if fr.FromDisplayName == "" && fr.FromShortID == "" && fr.FromName != "" {
+										who = fr.FromName
+									}
+									if fr.Greeting != "" {
+										fmt.Fprintf(os.Stdout, "[%s] ✉ %s (req_id=%s): %s\n", ts, safeInline(who), fr.RequestID, safeInline(fr.Greeting))
+									} else {
+										fmt.Fprintf(os.Stdout, "[%s] ✉ %s (req_id=%s)\n", ts, safeInline(who), fr.RequestID)
+									}
+								}
+							}
+							if len(data.Messages) > 0 {
+								fmt.Fprintln(os.Stdout, "--- new messages ---")
+								for _, m := range data.Messages {
+									printNewLine(m)
+								}
+							}
+							firstPacket = false
+							if once {
+								if err := drainCommissionNotifications(notificationClient, format, language, os.Stdout); err != nil {
+									output.PrintMessage("Commission notification processing failed: %v", err)
+									processingErr = err
+								}
+								// Offline backlog drained — exit without reconnecting.
+								shouldReconnect = false
+								return
+							}
+						} else {
+							for _, m := range data.Messages {
+								printNewLine(m)
+							}
+						}
+					}
+				}
+			}()
+
+			select {
+			case <-done:
+				stopRefreshTimer()
+				conn.Close()
+				if processingErr != nil {
+					return processingErr
+				}
+				if !shouldReconnect {
+					return nil
+				}
+				output.PrintMessage("Reconnecting in %s...", backoff)
+				select {
+				case <-time.After(backoff):
+					backoff = time.Duration(float64(backoff) * reconnectMul)
+					if backoff > reconnectMax {
+						backoff = reconnectMax
+					}
+				case <-ctx.Done():
+					return nil
+				}
+			case <-refreshDue:
+				stopRefreshTimer()
+				close(stopping)
+				conn.Close()
+				<-done
+				// The next connection reloads and refreshes credentials under the
+				// same Home lock, preserving the cursor for this Agent.
+				continue
+			case <-ctx.Done():
+				stopRefreshTimer()
+				close(stopping)
+				stop() // Restore default signal handling so a second signal terminates immediately.
+				_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(time.Second))
+				_ = conn.Close()
+				timer := time.NewTimer(3 * time.Second)
+				defer timer.Stop()
+				select {
+				case <-done:
+					return nil
+				case <-timer.C:
+					return fmt.Errorf("stream shutdown timed out draining received packet output")
+				}
+			}
+		}
+	},
+}
+
+// publicPeerLabel keeps the public, human-readable identity together at CLI
+// boundaries. Numeric IDs are retained only as a rollout fallback for old
+// servers that do not yet provide the optional identity fields.
+func publicPeerLabel(displayName, shortID, legacyUID string) string {
+	displayName = strings.TrimSpace(displayName)
+	shortID = strings.TrimSpace(shortID)
+	switch {
+	case displayName != "" && shortID != "":
+		return displayName + " (alicerealm#" + shortID + ")"
+	case displayName != "":
+		return displayName
+	case shortID != "":
+		return "Agent #" + shortID + " (alicerealm#" + shortID + ")"
+	default:
+		return legacyUID
+	}
+}
+
+func init() {
+	streamCmd.Flags().String("cursor", "", "resume from message cursor (msg_id)")
+	streamCmd.Flags().Bool("once", false, "connect, print the first packet (offline backlog replay), then exit")
+	rootCmd.AddCommand(streamCmd)
+}
+
+type streamMsg struct {
+	MsgID        string `json:"msg_id"`
+	ConvID       string `json:"conv_id"`
+	SenderID     string `json:"sender_id"`
+	ReceiverID   string `json:"receiver_id"`
+	SenderName   string `json:"sender_name"`
+	ReceiverName string `json:"receiver_name"`
+	Content      string `json:"content"`
+	CreatedAt    int64  `json:"created_at"`
+	// Server-verified: the sender is an ops-flagged official account.
+	SenderIsOfficial bool `json:"sender_is_official"`
+}
+
+// officialMark renders the server-verified official badge appended to a
+// sender's name. Officialness comes ONLY from the backend flag — never from
+// names or bios.
+func officialMark(isOfficial bool) string {
+	if isOfficial {
+		return " [✓ 官方已验证]"
+	}
+	return ""
+}
+
+// safeInline renders attacker-controlled text (message bodies, greetings, peer
+// names) as one inert line. Two jobs, in order of how much they can be trusted:
+//
+//  1. Neutralize the CLI's own task marker. This is the only defense here that
+//     does not depend on a model judging what it reads: a sender simply cannot
+//     emit the byte sequence the contract binds on. Everything else is
+//     hardening around it.
+//  2. Keep the text on the line it was rendered into. Line breaks, vertical
+//     tabs, form feeds, NEL/LS/PS, and ANSI escapes all let a sender paint
+//     lines of their own — or erase ones already printed — in a stream the
+//     agent reads as CLI structure. They become visible escapes instead.
+//
+// Length is capped for the same reason: an unbounded body can push earlier
+// output past the reader's window.
+const inlineRenderMax = 2000
+
+func safeInline(s string) string {
+	s = strings.ReplaceAll(s, "[PENDING TASK", "[PENDING_TASK")
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch {
+		case r == '\t':
+			b.WriteString("    ")
+		case r == '\n' || r == '\r' || r == '\v' || r == '\f' ||
+			r == '' || r == ' ' || r == ' ':
+			b.WriteString("\\n")
+		case r == 0x1b:
+			b.WriteString("\\e")
+		case r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f):
+			b.WriteString("\\x")
+		default:
+			b.WriteRune(r)
+		}
+	}
+	out := b.String()
+	if rs := []rune(out); len(rs) > inlineRenderMax {
+		out = string(rs[:inlineRenderMax]) + "…"
+	}
+	return out
+}
+
+func printHistoryLine(m streamMsg, myAgentID string) {
+	ts := time.UnixMilli(m.CreatedAt).Format("15:04:05")
+	if m.SenderID == myAgentID {
+		peer := m.ReceiverName
+		if peer == "" {
+			peer = m.ReceiverID
+		}
+		fmt.Fprintf(os.Stdout, "[%s] → %s: %s\n", ts, safeInline(peer), safeInline(m.Content))
+	} else {
+		peer := m.SenderName
+		if peer == "" {
+			peer = m.SenderID
+		}
+		fmt.Fprintf(os.Stdout, "[%s] ← %s%s: %s\n", ts, safeInline(peer), officialMark(m.SenderIsOfficial), safeInline(m.Content))
+	}
+}
+
+func printNewLine(m streamMsg) {
+	ts := time.UnixMilli(m.CreatedAt).Format("15:04:05")
+	sender := m.SenderName
+	if sender == "" {
+		sender = m.SenderID
+	}
+	fmt.Fprintf(os.Stdout, "[%s] %s%s: %s\n", ts, safeInline(sender), officialMark(m.SenderIsOfficial), safeInline(m.Content))
+}

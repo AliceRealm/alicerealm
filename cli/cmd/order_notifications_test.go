@@ -1,0 +1,112 @@
+package cmd
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/GardenVilla/alicerealm/cli/internal/auth"
+	"github.com/GardenVilla/alicerealm/cli/internal/client"
+)
+
+func TestDrainCommissionNotificationsRendersThenAcknowledges(t *testing.T) {
+	ackCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v2/notifications/pending":
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","data":{"notifications":[{"notification_id":"41","source_type":"commission_order","type":"order.state.changed.v1","created_at":1700000000000,"payload":{"order_id":"9007199254740993","order_version":3,"recipient_role":"buyer","state":"delivered","to_state":"delivered","snapshot_id":"9007199254740995","occurred_at":1700000000000}}],"has_more":false}}`))
+		case "/api/v2/notifications/ack":
+			ackCalls++
+			var body struct {
+				Notifications []struct {
+					ID     string `json:"notification_id"`
+					Source string `json:"source_type"`
+				} `json:"notifications"`
+			}
+			decoder := json.NewDecoder(r.Body)
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if got := body.Notifications[0].ID; got != "41" {
+				t.Fatalf("ack notification_id=%q", got)
+			}
+			var receipts map[string]string
+			if err := json.Unmarshal([]byte(r.Header.Get("X-AliceRealm-Notification-Receipts")), &receipts); err != nil || receipts["41"] != "displayed" {
+				t.Errorf("invalid receipt header: %v %v", receipts, err)
+			}
+			_, _ = w.Write([]byte(`{"code":0,"msg":"success","data":{"acknowledged":1}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	_, name := runtimeTestConfig(t, server.URL, true)
+	if _, _, _, err := auth.LoadOrCreateIdentity(name); err != nil {
+		t.Fatal(err)
+	}
+	api := client.New(server.URL+"/api/v2", "token", "test", client.Meta{})
+	var output strings.Builder
+	if err := drainCommissionNotifications(api, "table", "zh", &output); err != nil {
+		t.Fatal(err)
+	}
+	if ackCalls != 1 {
+		t.Fatalf("ack calls=%d, want 1", ackCalls)
+	}
+	if got := output.String(); !strings.Contains(got, "订单 #9007199254740993 v3") || !strings.Contains(got, "交付待买方验收") {
+		t.Fatalf("unexpected localized output %q", got)
+	}
+}
+
+func TestDrainCommissionNotificationsDoesNotAckInvalidPayload(t *testing.T) {
+	ackCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v2/notifications/ack" {
+			ackCalls++
+		}
+		_, _ = w.Write([]byte(`{"code":0,"msg":"success","data":{"notifications":[{"notification_id":"41","source_type":"commission_order","payload":{"order_id":7}}],"has_more":false}}`))
+	}))
+	defer server.Close()
+	_, name := runtimeTestConfig(t, server.URL, true)
+	if _, _, _, err := auth.LoadOrCreateIdentity(name); err != nil {
+		t.Fatal(err)
+	}
+	api := client.New(server.URL+"/api/v2", "token", "test", client.Meta{})
+	if err := drainCommissionNotifications(api, "json", "en", &strings.Builder{}); err == nil {
+		t.Fatal("invalid payload was accepted")
+	}
+	if ackCalls != 0 {
+		t.Fatalf("invalid payload was acknowledged")
+	}
+}
+
+func TestLocalizedOrderNotificationUnknownStateFallsBack(t *testing.T) {
+	role, summary := localizedOrderNotification("en", "seller", "future_state")
+	if role != "Seller" || summary != "Order updated" {
+		t.Fatalf("fallback=(%q,%q)", role, summary)
+	}
+}
+
+func TestLocalizedOrderNotificationCoversCommissionStates(t *testing.T) {
+	states := []string{
+		"preparing_materials", "awaiting_seller", "pending_payment", "in_progress", "validating",
+		"awaiting_buyer_confirmation", "refund_pending", "refunded", "cancelled", "completed",
+		"rejected", "expired",
+	}
+	for _, language := range []string{"zh", "en"} {
+		fallback := "Order updated"
+		if language == "zh" {
+			fallback = "订单已更新"
+		}
+		for _, state := range states {
+			t.Run(language+"/"+state, func(t *testing.T) {
+				_, summary := localizedOrderNotification(language, "buyer", state)
+				if summary == fallback {
+					t.Fatalf("state %q used fallback copy", state)
+				}
+			})
+		}
+	}
+}
