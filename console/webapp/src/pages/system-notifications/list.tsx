@@ -22,8 +22,8 @@ import { consoleApiUrl } from "../../config";
 import { useSessionState } from "../../hooks/useSessionState";
 
 const AUDIENCE_EXPR_TOOLTIP =
-  "Variables: skill_ver (string), skill_ver_num (int), cli_ver (string), cli_ver_num (int), agent_id (int64), email (string). Example: cli_ver_num >= 10200";
-const AUDIENCE_EXPR_PLACEHOLDER = "e.g. cli_ver_num >= 10200";
+  "可用变量：skill_ver（字符串）、skill_ver_num（整数）、cli_ver（字符串）、cli_ver_num（整数）、agent_id（int64）、email（字符串）。示例：cli_ver_num >= 10200";
+const AUDIENCE_EXPR_PLACEHOLDER = "例如：cli_ver_num >= 10200";
 
 interface SystemNotification {
   notification_id: string;
@@ -66,9 +66,19 @@ type EditFormValues = {
 };
 
 const statusMap: Record<number, { label: string; color: string }> = {
-  0: { label: "Draft", color: "default" },
-  1: { label: "Active", color: "success" },
-  2: { label: "Offline", color: "error" },
+  0: { label: "草稿", color: "default" },
+  1: { label: "生效中", color: "success" },
+  2: { label: "已下线", color: "error" },
+};
+
+const notificationTypeLabels: Record<string, string> = {
+  announcement: "公告",
+  system: "系统通知",
+};
+
+const audienceTypeLabels: Record<string, string> = {
+  broadcast: "所有智能体",
+  expression: "表达式筛选",
 };
 
 const formatTimestamp = (ts: number) => {
@@ -133,13 +143,13 @@ export const SystemNotificationList = () => {
         `${consoleApiUrl}/system-notifications`,
         body
       );
-      if (data.code !== 0) throw new Error(data.msg || "Create failed");
-      messageApi.success("Notification created");
+      if (data.code !== 0) throw new Error(data.msg || "创建失败");
+      messageApi.success("通知已创建");
       setCreateOpen(false);
       createForm.resetFields();
       await refetch();
     } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : "Create failed");
+      messageApi.error(error instanceof Error ? error.message : "创建失败");
     } finally {
       setSubmitting(false);
     }
@@ -174,13 +184,13 @@ export const SystemNotificationList = () => {
         `${consoleApiUrl}/system-notifications/${editingNotif.notification_id}`,
         body
       );
-      if (data.code !== 0) throw new Error(data.msg || "Update failed");
-      messageApi.success("Notification updated");
+      if (data.code !== 0) throw new Error(data.msg || "更新失败");
+      messageApi.success("通知已更新");
       setEditOpen(false);
       setEditingNotif(null);
       await refetch();
     } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : "Update failed");
+      messageApi.error(error instanceof Error ? error.message : "更新失败");
     } finally {
       setSubmitting(false);
     }
@@ -191,11 +201,11 @@ export const SystemNotificationList = () => {
       const { data } = await axios.post<NotificationMutationResp>(
         `${consoleApiUrl}/system-notifications/${record.notification_id}/offline`
       );
-      if (data.code !== 0) throw new Error(data.msg || "Offline failed");
-      messageApi.success("Notification offlined");
+      if (data.code !== 0) throw new Error(data.msg || "下线失败");
+      messageApi.success("通知已下线");
       await refetch();
     } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : "Offline failed");
+      messageApi.error(error instanceof Error ? error.message : "下线失败");
     }
   };
 
@@ -224,20 +234,20 @@ export const SystemNotificationList = () => {
       fixed: "left",
     },
     {
-      title: "Type",
+      title: "类型",
       dataIndex: "type",
       key: "type",
       width: 120,
-      render: (v: string) => <Tag color="blue">{v}</Tag>,
+      render: (v: string) => <Tag color="blue">{notificationTypeLabels[v] ?? v}</Tag>,
     },
     {
-      title: "Content",
+      title: "内容",
       dataIndex: "content",
       key: "content",
       width: 400,
       render: (v: string) => (
         <Typography.Paragraph
-          ellipsis={{ rows: 2, expandable: true, symbol: "more" }}
+          ellipsis={{ rows: 2, expandable: true, symbol: "展开" }}
           style={{ marginBottom: 0, maxWidth: 380, whiteSpace: "pre-wrap" }}
         >
           {v}
@@ -245,17 +255,17 @@ export const SystemNotificationList = () => {
       ),
     },
     {
-      title: "Status",
+      title: "状态",
       dataIndex: "status",
       key: "status",
       width: 100,
       render: (v: number) => {
-        const s = statusMap[v] ?? { label: `Unknown(${v})`, color: "default" };
+        const s = statusMap[v] ?? { label: `未知（${v}）`, color: "default" };
         return <Tag color={s.color}>{s.label}</Tag>;
       },
     },
     {
-      title: "Audience",
+      title: "接收范围",
       key: "audience",
       width: 200,
       render: (_, record) =>
@@ -264,50 +274,50 @@ export const SystemNotificationList = () => {
             {record.audience_expression}
           </Typography.Text>
         ) : (
-          <Tag>{record.audience_type}</Tag>
+          <Tag>{audienceTypeLabels[record.audience_type] ?? record.audience_type}</Tag>
         ),
     },
     {
-      title: "Start At",
+      title: "开始时间",
       dataIndex: "start_at",
       key: "start_at",
       width: 180,
       render: (v: number) => formatTimestamp(v),
     },
     {
-      title: "End At",
+      title: "结束时间",
       dataIndex: "end_at",
       key: "end_at",
       width: 180,
       render: (v: number) => formatTimestamp(v),
     },
     {
-      title: "Offline At",
+      title: "下线时间",
       dataIndex: "offline_at",
       key: "offline_at",
       width: 180,
       render: (v: number) => formatTimestamp(v),
     },
     {
-      title: "Created At",
+      title: "创建时间",
       dataIndex: "created_at",
       key: "created_at",
       width: 180,
       render: (v: number) => formatTimestamp(v),
     },
     {
-      title: "Actions",
+      title: "操作",
       key: "actions",
       width: 160,
       fixed: "right",
       render: (_, record) => (
         <Space>
           <Button size="small" onClick={() => openEditModal(record)}>
-            Edit
+            编辑
           </Button>
           {record.status !== 2 && (
             <Button size="small" danger onClick={() => void handleOffline(record)}>
-              Offline
+              下线
             </Button>
           )}
         </Space>
@@ -333,17 +343,17 @@ export const SystemNotificationList = () => {
                 setCreateOpen(true);
               }}
             >
-              New Notification
+              新建通知
             </Button>
             <Select
               allowClear
-              placeholder="Filter by status"
+              placeholder="按状态筛选"
               style={{ width: 160 }}
               value={statusFilter}
               options={[
-                { label: "Draft", value: 0 },
-                { label: "Active", value: 1 },
-                { label: "Offline", value: 2 },
+                { label: "草稿", value: 0 },
+                { label: "生效中", value: 1 },
+                { label: "已下线", value: 2 },
               ]}
               onChange={(value) => {
                 setStatusFilter(value);
@@ -375,7 +385,7 @@ export const SystemNotificationList = () => {
 
       {/* Create Modal */}
       <Modal
-        title="Create System Notification"
+        title="新建系统通知"
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
         onOk={() => void handleCreate()}
@@ -383,41 +393,41 @@ export const SystemNotificationList = () => {
         destroyOnHidden
       >
         <Form form={createForm} layout="vertical">
-          <Form.Item name="type" label="Type" rules={[{ required: true }]}>
+          <Form.Item name="type" label="类型" rules={[{ required: true }]}>
             <Select
               options={[
-                { label: "Announcement (one-time delivery)", value: "announcement" },
-                { label: "System (persistent while active)", value: "system" },
+                { label: "公告（一次性投递）", value: "announcement" },
+                { label: "系统通知（生效期间持续显示）", value: "system" },
               ]}
             />
           </Form.Item>
-          <Form.Item name="content" label="Content" rules={[{ required: true }]}>
+          <Form.Item name="content" label="内容" rules={[{ required: true }]}>
             <Input.TextArea rows={4} />
           </Form.Item>
-          <Form.Item name="status" label="Status" rules={[{ required: true }]}>
+          <Form.Item name="status" label="状态" rules={[{ required: true }]}>
             <Select
               options={[
-                { label: "Draft", value: 0 },
-                { label: "Active", value: 1 },
+                { label: "草稿", value: 0 },
+                { label: "生效中", value: 1 },
               ]}
             />
           </Form.Item>
-          <Form.Item name="time_range" label="Effective Window (optional)">
+          <Form.Item name="time_range" label="生效时间范围（可选）">
             <DatePicker.RangePicker showTime style={{ width: "100%" }} />
           </Form.Item>
-          <Form.Item name="audience_type" label="Audience Type" rules={[{ required: true }]}>
+          <Form.Item name="audience_type" label="接收范围类型" rules={[{ required: true }]}>
             <Select
               options={[
-                { label: "Broadcast (all agents)", value: "broadcast" },
-                { label: "Expression (filtered)", value: "expression" },
+                { label: "广播（所有智能体）", value: "broadcast" },
+                { label: "表达式（筛选接收者）", value: "expression" },
               ]}
             />
           </Form.Item>
           {createAudienceType === "expression" && (
             <Form.Item
               name="audience_expression"
-              label="Audience Expression"
-              rules={[{ required: true, message: "Expression is required" }]}
+              label="接收范围表达式"
+              rules={[{ required: true, message: "请输入表达式" }]}
               tooltip={AUDIENCE_EXPR_TOOLTIP}
             >
               <Input.TextArea rows={2} placeholder={AUDIENCE_EXPR_PLACEHOLDER} />
@@ -428,7 +438,7 @@ export const SystemNotificationList = () => {
 
       {/* Edit Modal */}
       <Modal
-        title={editingNotif ? `Edit Notification #${editingNotif.notification_id}` : "Edit"}
+        title={editingNotif ? `编辑通知 #${editingNotif.notification_id}` : "编辑通知"}
         open={editOpen}
         onCancel={() => {
           setEditOpen(false);
@@ -439,41 +449,41 @@ export const SystemNotificationList = () => {
         destroyOnHidden
       >
         <Form form={editForm} layout="vertical">
-          <Form.Item name="type" label="Type" rules={[{ required: true }]}>
+          <Form.Item name="type" label="类型" rules={[{ required: true }]}>
             <Select
               options={[
-                { label: "Announcement (one-time delivery)", value: "announcement" },
-                { label: "System (persistent while active)", value: "system" },
+                { label: "公告（一次性投递）", value: "announcement" },
+                { label: "系统通知（生效期间持续显示）", value: "system" },
               ]}
             />
           </Form.Item>
-          <Form.Item name="content" label="Content" rules={[{ required: true }]}>
+          <Form.Item name="content" label="内容" rules={[{ required: true }]}>
             <Input.TextArea rows={4} />
           </Form.Item>
-          <Form.Item name="status" label="Status" rules={[{ required: true }]}>
+          <Form.Item name="status" label="状态" rules={[{ required: true }]}>
             <Select
               options={[
-                { label: "Draft", value: 0 },
-                { label: "Active", value: 1 },
+                { label: "草稿", value: 0 },
+                { label: "生效中", value: 1 },
               ]}
             />
           </Form.Item>
-          <Form.Item name="time_range" label="Effective Window (optional)">
+          <Form.Item name="time_range" label="生效时间范围（可选）">
             <DatePicker.RangePicker showTime style={{ width: "100%" }} allowEmpty />
           </Form.Item>
-          <Form.Item name="audience_type" label="Audience Type" rules={[{ required: true }]}>
+          <Form.Item name="audience_type" label="接收范围类型" rules={[{ required: true }]}>
             <Select
               options={[
-                { label: "Broadcast (all agents)", value: "broadcast" },
-                { label: "Expression (filtered)", value: "expression" },
+                { label: "广播（所有智能体）", value: "broadcast" },
+                { label: "表达式（筛选接收者）", value: "expression" },
               ]}
             />
           </Form.Item>
           {editAudienceType === "expression" && (
             <Form.Item
               name="audience_expression"
-              label="Audience Expression"
-              rules={[{ required: true, message: "Expression is required" }]}
+              label="接收范围表达式"
+              rules={[{ required: true, message: "请输入表达式" }]}
               tooltip={AUDIENCE_EXPR_TOOLTIP}
             >
               <Input.TextArea rows={2} placeholder={AUDIENCE_EXPR_PLACEHOLDER} />

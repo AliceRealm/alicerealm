@@ -35,10 +35,10 @@ type EditFormValues = {
 };
 
 const profileStatusMap: Record<number, { label: string; color: string }> = {
-  0: { label: "Pending", color: "default" },
-  1: { label: "Processing", color: "processing" },
-  2: { label: "Failed", color: "error" },
-  3: { label: "Completed", color: "success" },
+  0: { label: "待处理", color: "default" },
+  1: { label: "处理中", color: "processing" },
+  2: { label: "失败", color: "error" },
+  3: { label: "已完成", color: "success" },
 };
 
 const formatTimestamp = (ts: number) => {
@@ -118,13 +118,13 @@ export const AgentList = () => {
         `${consoleApiUrl}/agents/${editingAgent.agent_id}`,
         body
       );
-      if (data.code !== 0) throw new Error(data.msg || "Update failed");
-      messageApi.success("Agent updated");
+      if (data.code !== 0) throw new Error(data.msg || "更新失败");
+      messageApi.success("智能体已更新");
       setEditOpen(false);
       setEditingAgent(null);
       await refetch();
     } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : "Update failed");
+      messageApi.error(error instanceof Error ? error.message : "更新失败");
     } finally {
       setSubmitting(false);
     }
@@ -139,14 +139,14 @@ export const AgentList = () => {
       fixed: "left",
     },
     {
-      title: "Short ID",
+      title: "短 ID",
       dataIndex: "short_id",
       key: "short_id",
       width: 100,
       render: (shortID: string) => shortID || "-",
     },
     {
-      title: "Name",
+      title: "名称",
       dataIndex: "agent_name",
       key: "agent_name",
       width: 180,
@@ -163,20 +163,20 @@ export const AgentList = () => {
         ),
     },
     {
-      title: "Email",
+      title: "邮箱",
       dataIndex: "email",
       key: "email",
       width: 200,
     },
     {
-      title: "Bio",
+      title: "简介",
       dataIndex: "bio",
       key: "bio",
       width: 250,
       render: (text: string) => text ? (
         <Typography.Paragraph
           copyable={{ tooltips: false }}
-          ellipsis={{ rows: 5, expandable: true, symbol: "more" }}
+          ellipsis={{ rows: 5, expandable: true, symbol: "展开" }}
           style={{ marginBottom: 0, maxWidth: 230, whiteSpace: "pre-wrap" }}
         >
           {text}
@@ -184,7 +184,7 @@ export const AgentList = () => {
       ) : "-",
     },
     {
-      title: "Profile Status",
+      title: "资料状态",
       dataIndex: "profile_status",
       key: "profile_status",
       width: 130,
@@ -195,7 +195,7 @@ export const AgentList = () => {
       },
     },
     {
-      title: "Profile Keywords",
+      title: "资料关键词",
       dataIndex: "profile_keywords",
       key: "profile_keywords",
       width: 250,
@@ -205,7 +205,7 @@ export const AgentList = () => {
         return (
           <Typography.Paragraph
             copyable={{ tooltips: false }}
-            ellipsis={{ rows: 5, expandable: true, symbol: "more" }}
+            ellipsis={{ rows: 5, expandable: true, symbol: "展开" }}
             style={{ marginBottom: 0, maxWidth: 230, whiteSpace: "pre-wrap" }}
           >
             {joined}
@@ -214,34 +214,34 @@ export const AgentList = () => {
       },
     },
     {
-      title: "Created At",
+      title: "创建时间",
       dataIndex: "created_at",
       key: "created_at",
       width: 180,
       render: (ts: number) => formatTimestamp(ts),
     },
     {
-      title: "Updated At",
+      title: "更新时间",
       dataIndex: "updated_at",
       key: "updated_at",
       width: 180,
       render: (ts: number) => formatTimestamp(ts),
     },
     {
-      title: "Actions",
+      title: "操作",
       key: "actions",
       width: 240,
       fixed: "right",
       render: (_, record) => (
         <div style={{ display: "flex", gap: 8 }}>
           <Button size="small" onClick={() => openEditModal(record)}>
-            Edit
+            编辑
           </Button>
           <Button
             size="small"
             onClick={() => navigate(`/impr?agent_id=${encodeURIComponent(record.agent_id)}`)}
           >
-            Impr
+            推荐记录
           </Button>
           <Button
             size="small"
@@ -249,7 +249,7 @@ export const AgentList = () => {
               navigate(`/conversations?agent_id=${encodeURIComponent(record.agent_id)}`)
             }
           >
-            Conversations
+            会话
           </Button>
         </div>
       ),
@@ -263,7 +263,7 @@ export const AgentList = () => {
         headerButtons={
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             <Input.Search
-              placeholder="Agent ID"
+              placeholder="智能体 ID"
               allowClear
               inputMode="numeric"
               defaultValue={agentIdFilter}
@@ -274,7 +274,7 @@ export const AgentList = () => {
               style={{ width: 160 }}
             />
             <Input.Search
-              placeholder="Email contains"
+              placeholder="邮箱包含"
               allowClear
               defaultValue={emailFilter}
               onSearch={(value) => {
@@ -284,7 +284,7 @@ export const AgentList = () => {
               style={{ width: 220 }}
             />
             <Input.Search
-              placeholder="Search by name"
+              placeholder="按名称搜索"
               allowClear
               defaultValue={nameFilter}
               onSearch={(value) => {
@@ -294,7 +294,7 @@ export const AgentList = () => {
               style={{ width: 200 }}
             />
             <Input.Search
-              placeholder="Profile keywords"
+              placeholder="资料关键词"
               allowClear
               defaultValue={profileKeywordsFilter}
               onSearch={(value) => {
@@ -304,7 +304,7 @@ export const AgentList = () => {
               style={{ width: 220 }}
             />
             <Select
-              placeholder="Profile status"
+              placeholder="资料状态"
               allowClear
               value={profileStatusFilter}
               onChange={(value) => {
@@ -313,10 +313,10 @@ export const AgentList = () => {
               }}
               style={{ width: 180 }}
               options={[
-                { label: "Pending", value: 0 },
-                { label: "Processing", value: 1 },
-                { label: "Failed", value: 2 },
-                { label: "Completed", value: 3 },
+                { label: "待处理", value: 0 },
+                { label: "处理中", value: 1 },
+                { label: "失败", value: 2 },
+                { label: "已完成", value: 3 },
               ]}
             />
           </div>
@@ -343,7 +343,7 @@ export const AgentList = () => {
       </List>
 
       <Modal
-        title={editingAgent ? `Edit Agent - ${editingAgent.agent_name || editingAgent.agent_id}` : "Edit Agent"}
+        title={editingAgent ? `编辑智能体 - ${editingAgent.agent_name || editingAgent.agent_id}` : "编辑智能体"}
         open={editOpen}
         onCancel={() => {
           setEditOpen(false);
@@ -356,10 +356,10 @@ export const AgentList = () => {
         <Form form={editForm} layout="vertical">
           <Form.Item
             name="profile_keywords"
-            label="Profile Keywords"
-            tooltip="Comma-separated keywords, e.g.: AI, Machine Learning, NLP"
+            label="资料关键词"
+            tooltip="使用英文逗号分隔，例如：AI, 机器学习, NLP"
           >
-            <Input.TextArea rows={4} placeholder="keyword1, keyword2, keyword3" />
+            <Input.TextArea rows={4} placeholder="关键词1, 关键词2, 关键词3" />
           </Form.Item>
         </Form>
       </Modal>

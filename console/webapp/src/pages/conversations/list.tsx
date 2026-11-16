@@ -120,10 +120,10 @@ export const ConversationList = () => {
     setMessagesLoading(true);
     try {
       const { data } = await axios.get(`${consoleApiUrl}/conversations/${conv.conv_id}/messages`);
-      if (data.code !== 0 || !data.data) throw new Error(data.msg || "Failed to load messages");
+      if (data.code !== 0 || !data.data) throw new Error(data.msg || "加载消息失败");
       setMessages(data.data.messages ?? []);
     } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : "Failed to load messages");
+      messageApi.error(error instanceof Error ? error.message : "加载消息失败");
     } finally {
       setMessagesLoading(false);
     }
@@ -170,7 +170,7 @@ export const ConversationList = () => {
 
   const columns: ColumnsType<Conversation> = [
     {
-      title: "Participants",
+      title: "参与者",
       key: "participants",
       width: 280,
       render: (_: unknown, r: Conversation) => (
@@ -188,7 +188,7 @@ export const ConversationList = () => {
       render: (c: string) => categoryLabel(c || ""),
     },
     {
-      title: "Item ID",
+      title: "内容 ID",
       dataIndex: "origin_id",
       key: "origin_id",
       width: 140,
@@ -196,33 +196,33 @@ export const ConversationList = () => {
         r.origin_type === "broadcast" && r.origin_id ? r.origin_id : "-",
     },
     {
-      title: "Last Msg Time",
+      title: "最后消息时间",
       dataIndex: "updated_at",
       key: "updated_at",
       width: 180,
       render: (ts: number) => formatTimestamp(ts),
     },
     {
-      title: "Last Sender",
+      title: "最后发送者",
       key: "last_sender",
       width: 200,
       render: (_: unknown, r: Conversation) =>
         r.last_sender_id ? participantLabel(r.last_sender_id, r.last_sender_name) : "-",
     },
     {
-      title: "Messages",
+      title: "消息数",
       dataIndex: "msg_count",
       key: "msg_count",
       width: 90,
     },
     {
-      title: "Actions",
+      title: "操作",
       key: "actions",
       width: 120,
       fixed: "right",
       render: (_: unknown, r: Conversation) => (
         <Button size="small" onClick={() => void openMessagesDrawer(r)}>
-          messages
+          查看消息
         </Button>
       ),
     },
@@ -236,7 +236,7 @@ export const ConversationList = () => {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             <Input.Search
               key={`item-${itemIdFilter}`}
-              placeholder="Item ID"
+              placeholder="内容 ID"
               allowClear
               inputMode="numeric"
               defaultValue={itemIdFilter}
@@ -245,7 +245,7 @@ export const ConversationList = () => {
             />
             <Input.Search
               key={`agent-${agentIdFilter}`}
-              placeholder="Agent ID"
+              placeholder="智能体 ID"
               allowClear
               inputMode="numeric"
               defaultValue={agentIdFilter}
@@ -275,18 +275,18 @@ export const ConversationList = () => {
             }}
           />
         ) : (
-          <Empty description="Enter Item ID or Agent ID to search" />
+          <Empty description="请输入内容 ID 或智能体 ID 进行搜索" />
         )}
       </List>
 
       <Drawer
         title={
           drawerConv
-            ? `Conversation ${drawerConv.conv_id} — ${participantLabel(
+            ? `会话 ${drawerConv.conv_id} — ${participantLabel(
                 drawerConv.participant_a,
                 drawerConv.participant_a_name,
               )} ↔ ${participantLabel(drawerConv.participant_b, drawerConv.participant_b_name)}`
-            : "Messages"
+            : "消息"
         }
         placement="right"
         width={840}
@@ -299,7 +299,7 @@ export const ConversationList = () => {
             <Spin />
           </div>
         ) : messages.length === 0 ? (
-          <Empty description="No messages" />
+          <Empty description="暂无消息" />
         ) : (
           <Space direction="vertical" style={{ width: "100%" }} size={12}>
             {messages.map((m) => (

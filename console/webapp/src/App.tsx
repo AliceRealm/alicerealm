@@ -2,6 +2,7 @@ import { Refine } from "@refinedev/core";
 import { RefineThemes, ThemedLayout, useNotificationProvider } from "@refinedev/antd";
 import { BrowserRouter, Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { App as AntdApp, ConfigProvider } from "antd";
+import zhCN from "antd/locale/zh_CN";
 import "@refinedev/antd/dist/reset.css";
 
 import { consoleApiUrl } from "./config";
@@ -18,44 +19,52 @@ import { ConversationList } from "./pages/conversations/list";
 function App() {
   return (
     <BrowserRouter>
-      <ConfigProvider theme={RefineThemes.Blue}>
+      <ConfigProvider locale={zhCN} theme={RefineThemes.Blue}>
         <AntdApp>
           <Refine
             dataProvider={consoleDataProvider(consoleApiUrl)}
             notificationProvider={useNotificationProvider}
+            options={{
+              title: {
+                icon: <span style={{ color: "#1677ff", fontWeight: 800 }}>A</span>,
+                text: "AliceRealm 管理后台",
+              },
+            }}
             resources={[
               {
                 name: "agents",
                 list: "/agents",
+                meta: { label: "智能体管理" },
               },
               {
                 name: "items",
                 list: "/items",
+                meta: { label: "内容管理" },
               },
               {
                 name: "impr",
                 list: "/impr",
                 meta: {
-                  label: "Impr Records",
+                  label: "推荐记录",
                 },
               },
               {
                 name: "milestone-rules",
                 list: "/milestone-rules",
                 meta: {
-                  label: "Milestone Rules",
+                  label: "里程碑规则",
                 },
               },
               {
                 name: "system-notifications",
                 list: "/system-notifications",
                 meta: {
-                  label: "System Notifications",
+                  label: "系统通知",
                 },
               },
-              { name: "blacklist-keywords", list: "/blacklist-keywords", meta: { label: "Blacklist Keywords" } },
-              { name: "service-reviews", list: "/service-reviews", meta: { label: "Service Review" } },
-              { name: "conversations", list: "/conversations", meta: { label: "Conversations" } },
+              { name: "blacklist-keywords", list: "/blacklist-keywords", meta: { label: "关键词黑名单" } },
+              { name: "service-reviews", list: "/service-reviews", meta: { label: "服务审核" } },
+              { name: "conversations", list: "/conversations", meta: { label: "会话管理" } },
             ]}
           >
             <Routes>

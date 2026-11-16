@@ -32,7 +32,7 @@ describe("session page state", () => {
 
   it("falls back when stored JSON is invalid", () => {
     const storage = new MemoryStorage();
-    storage.setItem("eigenflux.console.page-state.items", "not-json");
+    storage.setItem("alicerealm.console.page-state.items", "not-json");
 
     assert.deepEqual(readSessionValue(storage, "items", { current: 1 }), { current: 1 });
   });
