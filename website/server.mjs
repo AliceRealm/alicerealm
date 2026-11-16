@@ -4,8 +4,11 @@ import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
+const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const port = Number.parseInt(process.env.WEBSITE_PORT || '4173', 10);
 const host = process.env.WEBSITE_HOST || '127.0.0.1';
+const apiOrigin = new URL(process.env.ALICEREALM_API_ORIGIN || 'http://127.0.0.1:8080');
+const installDocument = join(repoRoot, 'skills', 'install.md');
 
 const contentTypes = new Map([
   ['.html', 'text/html; charset=utf-8'],
@@ -13,12 +16,10 @@ const contentTypes = new Map([
   ['.js', 'text/javascript; charset=utf-8'],
   ['.svg', 'image/svg+xml'],
   ['.json', 'application/json; charset=utf-8'],
+  ['.md', 'text/markdown; charset=utf-8'],
 ]);
 
-const publicApiPaths = new Set([
-  '/api/v1/website/stats',
-  '/api/v1/website/latest-items',
-]);
+const proxiedFiles = new Set(['/bootstrap.md', '/install.ps1', '/install.sh', '/uninstall.ps1', '/uninstall.sh']);
 
 function setSecurityHeaders(response) {
   response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
@@ -28,27 +29,37 @@ function setSecurityHeaders(response) {
   response.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 }
 
-function proxyPublicApi(request, response, url) {
+function isGatewayPath(pathname) {
+  return pathname === '/api' || pathname.startsWith('/api/') || pathname.startsWith('/r/') || proxiedFiles.has(pathname);
+}
+
+function proxyGateway(request, response, url) {
+  const headers = { ...request.headers, host: apiOrigin.host };
+  delete headers.connection;
+  delete headers['proxy-connection'];
   const upstream = http.request({
-    hostname: '127.0.0.1',
-    port: 8080,
+    hostname: apiOrigin.hostname,
+    port: apiOrigin.port || 80,
     path: `${url.pathname}${url.search}`,
-    method: 'GET',
-    headers: { Accept: 'application/json' },
+    method: request.method,
+    headers,
     timeout: 8_000,
   }, (upstreamResponse) => {
-    response.writeHead(upstreamResponse.statusCode || 502, {
-      'Content-Type': upstreamResponse.headers['content-type'] || 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store',
-    });
+    for (const [name, value] of Object.entries(upstreamResponse.headers)) {
+      if (value !== undefined && !['connection', 'keep-alive', 'transfer-encoding'].includes(name)) {
+        response.setHeader(name, value);
+      }
+    }
+    response.setHeader('Cache-Control', 'no-store');
+    response.writeHead(upstreamResponse.statusCode || 502);
     upstreamResponse.pipe(response);
   });
   upstream.on('timeout', () => upstream.destroy(new Error('API timeout')));
   upstream.on('error', () => {
     if (!response.headersSent) response.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
-    response.end(JSON.stringify({ code: 502, msg: 'status service unavailable' }));
+    response.end(JSON.stringify({ code: 502, msg: 'AliceRealm gateway unavailable' }));
   });
-  upstream.end();
+  request.pipe(upstream);
 }
 
 function resolveAsset(pathname) {
@@ -61,15 +72,25 @@ function resolveAsset(pathname) {
 
 const server = http.createServer((request, response) => {
   setSecurityHeaders(response);
+  const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
+  if (isGatewayPath(url.pathname)) {
+    proxyGateway(request, response, url);
+    return;
+  }
+
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     response.writeHead(405, { Allow: 'GET, HEAD' });
     response.end();
     return;
   }
 
-  const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
-  if (publicApiPaths.has(url.pathname)) {
-    proxyPublicApi(request, response, url);
+  if (url.pathname === '/install.md') {
+    response.writeHead(200, {
+      'Content-Type': 'text/markdown; charset=utf-8',
+      'Cache-Control': 'no-store',
+    });
+    if (request.method === 'HEAD') response.end();
+    else createReadStream(installDocument).pipe(response);
     return;
   }
 

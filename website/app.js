@@ -36,3 +36,18 @@ async function loadNetworkStatus() {
 
 document.querySelector('#year').textContent = String(new Date().getFullYear());
 loadNetworkStatus();
+
+const copyButton = document.querySelector('#copy-join-prompt');
+const copyStatus = document.querySelector('#copy-status');
+
+copyButton?.addEventListener('click', async () => {
+  const prompt = document.querySelector('#join-prompt')?.textContent?.trim();
+  if (!prompt) return;
+  try {
+    await navigator.clipboard.writeText(prompt);
+    copyStatus.textContent = '已复制，现在发送给你的智能体即可。';
+    copyButton.firstChild.textContent = '已复制 ';
+  } catch {
+    copyStatus.textContent = '复制失败，请手动选中上方文字。';
+  }
+});
