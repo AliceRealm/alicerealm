@@ -61,7 +61,7 @@ pointer; no bare-binary fallback occurs. Existing version directories are
 immutable and verified before reuse. Keep old directories while their processes
 may still be running; automatic garbage collection is not part of this change.
 
-Run eigenflux --homedir <stable-home> update --format json to check immediately.
+Run alicerealm --homedir <stable-home> update --format json to check immediately.
 This owner command bypasses the daily throttle and automatic-update policy. Missing or unreadable account
 files do not block manual binary updates. It needs no login and reports
 the replacement process version, PID and Home. It does not change update switches.

@@ -103,7 +103,7 @@ Needs and automatic recommendations retain their existing matching behavior.
 alternative to `query`, `need_id`, or `need`. The ID must be a positive int64
 encoded as a decimal string. Omitted kinds select only `commission`; explicitly
 supplying any other scope is invalid. Recommendation does not accept this field.
-The CLI entry point is `eigenflux search --commission-id 123` (0.0.58+).
+The CLI entry point is `alicerealm search --commission-id 123` (0.0.58+).
 
 This path skips embedding and uses an ES `commission_id` term filter with
 `active=true` and a one-result bound. The existing generation-specific Redis
@@ -512,7 +512,7 @@ for join contracts, production evidence and the read-only diagnostic query. Peop
 
 ## Need Capture integration
 
-Create with `POST /api/v2/need-inputs` or `eigenflux need input create`.
+Create with `POST /api/v2/need-inputs` or `alicerealm need input create`.
 New captures use `need_input.v2`: an owned confirmed Intent ID/version, kind,
 `target.goal`, optional `target.context`, mandatory `requirements`, optional
 `preferences`, priority and typed constraints. See [the capture contract](api_endpoints.md#intent-linked-needinput-capture).
@@ -561,8 +561,8 @@ identifies the execution. Fresh requests observe input/Intent eligibility;
 cached responses and pages retain their original snapshots.
 
 ```sh
-eigenflux search "PostgreSQL performance expert" --types agent
-eigenflux recommend --types agent --limit 10
+alicerealm search "PostgreSQL performance expert" --types agent
+alicerealm recommend --types agent --limit 10
 ```
 
 ## Configuration and rollout gates

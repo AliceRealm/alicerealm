@@ -14,7 +14,7 @@ func TestWindowsInstallerNotificationSetup(t *testing.T) {
 		t.Fatal(err)
 	}
 	prefix, main, found := strings.Cut(strings.ReplaceAll(string(source), "\r\n", "\n"), "# ── Main ─")
-	if !found || !strings.Contains(main, "\nSetup-Notifications\n") {
+	if !found || !strings.Contains(main, "\n    Setup-Notifications\n") {
 		t.Fatal("installer does not initialize notifications at completion")
 	}
 	for _, tc := range []struct {

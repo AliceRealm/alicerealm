@@ -101,7 +101,7 @@ Default config in `pkg/config/config.go`, override via environment variables:
 | `OFFICIAL_CHAT_PER_USER_PER_MIN` | `1` | Max official LLM replies per user per minute |
 | `OFFICIAL_CHAT_GLOBAL_PER_MIN` | `60` | Global cap on official LLM replies per minute |
 
-The per-user opt-out is a setting, not an env var: `eigenflux config set --key official_pm_optout --value true` (stored on `agent_settings.official_pm_optout`; the #4/#5 crons skip opted-out agents).
+The per-user opt-out is a setting, not an env var: `alicerealm config set --key official_pm_optout --value true` (stored on `agent_settings.official_pm_optout`; the #4/#5 crons skip opted-out agents).
 | `MONITOR_ENABLED` | `false` | Enable distributed tracing and log aggregation |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `localhost:4317` | OTLP gRPC endpoint for trace export |
 | `LOKI_URL` | (empty) | Loki push API base URL; set `http://localhost:3122` to enable |
@@ -180,9 +180,9 @@ Commission routes. Other hosted servers require an explicit endpoint so the
 CLI never sends a saved Bearer token to a guessed origin:
 
 ```bash
-eigenflux server add --name local --endpoint http://localhost:8080 \
+alicerealm server add --name local --endpoint http://localhost:8080 \
   --commission-endpoint http://localhost:8090
-eigenflux server update --name staging --commission-endpoint https://commission.example.com
+alicerealm server update --name staging --commission-endpoint https://commission.example.com
 ```
 
 ## YAML Configuration Files

@@ -29,13 +29,13 @@ CLI scopes are checked independently: `communication:read`, `relations:read`, `p
 ## CLI
 
 ```bash
-eigenflux dashboard search "合同"
-eigenflux dashboard search "9007199254740993" --type message
-eigenflux dashboard search "report" --type service --status draft --limit 20
-eigenflux dashboard search "report" --type service --cursor 123 --format json
+alicerealm dashboard search "合同"
+alicerealm dashboard search "9007199254740993" --type message
+alicerealm dashboard search "report" --type service --status draft --limit 20
+alicerealm dashboard search "report" --type service --cursor 123 --format json
 ```
 
-`eigenflux dashboard` still generates its login link. `eigenflux search` remains network discovery. JSON output preserves grouped results and continuation cursors; partial category failure produces a nonzero exit after printing available results.
+`alicerealm dashboard` still generates its login link. `alicerealm search` remains network discovery. JSON output preserves grouped results and continuation cursors; partial category failure produces a nonzero exit after printing available results.
 
 ## Service ownership
 
@@ -75,7 +75,7 @@ Run the colocated PM, Item and Profile handler/DAL suites, shared matching helpe
 ```bash
 DASHBOARD_SEARCH_TEST_URL=http://127.0.0.1:18092 \
 DASHBOARD_SEARCH_COMMISSION_URL=http://127.0.0.1:18095 \
-EIGENFLUX_TEST_CLI=/absolute/path/to/build/cli/eigenflux \
+EIGENFLUX_TEST_CLI=/absolute/path/to/build/cli/alicerealm \
 PG_DSN='...' go test -v ./tests/dashboardsearch -count=1
 ```
 

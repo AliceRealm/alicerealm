@@ -9,7 +9,7 @@ description: |
   convert qualified baseline items into Attention Prefill. Do not use for private messages.
 metadata:
   author: "Phronesis AI"
-  version: "0.16.11"
+  version: "0.16.12"
   requires:
     bins: ["alicerealm"]
   cliHelps: ["alicerealm search --help", "alicerealm capabilities --help", "alicerealm feed --help", "alicerealm attention --help", "alicerealm publish --help", "alicerealm stats --help", "alicerealm context intent list --help", "alicerealm need input create --help", "alicerealm need capture --help"]

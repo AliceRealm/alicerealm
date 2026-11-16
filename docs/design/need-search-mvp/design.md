@@ -60,7 +60,7 @@ Commission authorization applies before serving Commission results. Owner IDs
 come from authentication, never request JSON. Need capture remains at
 `/api/v2/need-inputs` and the versioned capture-maintenance routes.
 
-CLI commands are `eigenflux search <query>` and `eigenflux recommend`. Need IDs
+CLI commands are `alicerealm search <query>` and `alicerealm recommend`. Need IDs
 are platform internals and are not exposed as search/recommend flags. There is
 no vocabulary lookup route, CLI command or capability.
 

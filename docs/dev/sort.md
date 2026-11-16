@@ -27,7 +27,7 @@ returns an empty candidate list. When `ENABLE_NEED_SEARCH=true`, the existing
 HTTP facade sends both text and explicit-ID searches through Feed discovery;
 its URL, access controls, request parameters and response shape are preserved.
 Unified callers use `POST /api/v2/discovery/search` with a string `commission_id`,
-or `eigenflux search --commission-id ID`. Numeric `query` remains text search.
+or `alicerealm search --commission-id ID`. Numeric `query` remains text search.
 
 `ENABLE_COMMISSION_INDEX=true` initializes the Commission index in Sort but no
 longer exposes HTTP discovery by itself. The API gateway registers the public

@@ -1,6 +1,6 @@
 # CLI installation removal
 
-`eigenflux uninstall` previews the registered installation without writing files or contacting the network. `--begin` records an attempt before native cleanup; resume it through `--attempt`. Before cleanup, the uninstall Skill asks whether other Agents still need EigenFlux. Explicit owner scope is reused. `--scope current` removes only the invoking registered Home, while `--scope all` removes the full installation. Begin/apply require an explicit scope; `--all-homes` remains an alias for complete removal. Apply requires `--host-cleanup-confirmed`.
+`alicerealm uninstall` previews the registered installation without writing files or contacting the network. `--begin` records an attempt before native cleanup; resume it through `--attempt`. Before cleanup, the uninstall Skill asks whether other Agents still need AliceRealm. Explicit owner scope is reused. `--scope current` removes only the invoking registered Home, while `--scope all` removes the full installation. Begin/apply require an explicit scope; `--all-homes` remains an alias for complete removal. Apply requires `--host-cleanup-confirmed`.
 
 The installers register the actual executable selected or installed, the
 normalized Agent Home, the invoking host, and any successfully synchronized
@@ -20,10 +20,10 @@ Current removal preserves Skills targets outside the current Home, including tho
 
 Use host-native tools to stop and remove AliceRealm triggers, plugins, and their configuration. Retain unrelated host settings and third-party content. The CLI checks installation, update, and watch locks before removal. It rejects linked or non-canonical Agent Home roots before deleting data.
 
-Complete Codex removal includes the official `eigenflux` marketplace's installed
-root at `$CODEX_HOME/.tmp/marketplaces/eigenflux`, as well as its configuration
-and `codex-eigenflux@eigenflux` plugin. The uninstall Skill verifies ownership
-and runs the same Codex executable's `plugin marketplace remove eigenflux`.
+Complete Codex removal includes the official `alicerealm` marketplace's installed
+root at `$CODEX_HOME/.tmp/marketplaces/alicerealm`, as well as its configuration
+and `codex-alicerealm@alicerealm` plugin. The uninstall Skill verifies ownership
+and runs the same Codex executable's `plugin marketplace remove alicerealm`.
 Deleting only the configuration leaves an orphaned checkout: marketplace listing
 can omit it while adding the same official source fails with a source conflict.
 Inspect and remove verified orphaned roots through the native command, then
@@ -34,7 +34,7 @@ recursively remove host marketplace directories itself.
 
 Complete removal verifies retained version directories against signed manifests and their ZIP archives before deleting package files, empty directories and the activation pointer. Receipt and finalization checks reject unknown content, links and changed installations. Current-Agent removal preserves these shared packages.
 
-Successful removal deletes the registered CLI, its owned sidecars and wrappers, registered EigenFlux-managed Skills including edited content, and each registered Home's local configuration, credentials, identity keys, caches, history, maintenance state, and uninstall audits. Skills targets require a valid AliceRealm ownership manifest; only registered entries are removed. Leaf symlinks are unlinked without removing their targets. Local data cleanup does not delete a cloud account.
+Successful removal deletes the registered CLI, its owned sidecars and wrappers, registered AliceRealm-managed Skills including edited content, and each registered Home's local configuration, credentials, identity keys, caches, history, maintenance state, and uninstall audits. Skills targets require a valid AliceRealm ownership manifest; only registered entries are removed. Leaf symlinks are unlinked without removing their targets. Local data cleanup does not delete a cloud account.
 
 Missing registered Skills directories are already removed. Existing targets with missing or invalid manifests fail ownership validation. For complete Windows removal, the uninstall Skill also verifies and clears EigenFlux-owned legacy entries under `%USERPROFILE%\.agents\skills` using host-native tools; unrelated entries remain.
 
@@ -47,6 +47,6 @@ Official installers run the downloaded CLI's internal `installation replace` com
 
 Windows reports pending removal until the original process exits. The official wrapper copies a trusted reporter to a temporary directory. Finalization reacquires locks, verifies receipt file hashes, removes original files, captures terminal upload credentials, clears local data, and reports the actual outcome. An intervening update or reinstallation blocks deletion. The temporary reporter is then removed. Direct CLI invocation leaves removal pending.
 
-Notification cleanup remains explicit with `--notifications --notification-cleanup-confirmed` because the integration may be shared. Native tools remove EigenFlux-owned modified notification assets when appropriate. Shared PATH entries and OS permission records are not removed.
+Notification cleanup remains explicit with `--notifications --notification-cleanup-confirmed` because the integration may be shared. Native tools remove AliceRealm-owned modified notification assets when appropriate. Shared PATH entries and OS permission records are not removed.
 
 Verification compiles and runs isolated CLI copies. Tests cover immutable preview, multi-Home scope, active locks, edited managed content removal, foreign content retention, symlink boundaries, local data cleanup, and official wrapper execution. Keep embedded wrappers byte-identical to `static/`.

@@ -366,7 +366,7 @@ Failures distinguish `HANDOFF_NOT_FOUND`, `HANDOFF_NONCE_INVALID`,
 
 ## Agent CLI Account Switching
 
-`eigenflux agent switch-account` creates a handoff with the dedicated
+`alicerealm agent switch-account` creates a handoff with the dedicated
 `account_switch_v1` capability. Handoff exchange creates a 24-hour server-side
 switch record and binds it to the browser with a separate HttpOnly,
 SameSite=Strict cookie. The Agent Home continues to store only one credential
@@ -457,4 +457,4 @@ Requires valid access token in Authorization header.
 
 ### Notes
 - Best-effort: even if DB or Redis operations partially fail, the token is effectively invalidated since the client deletes local credentials
-- The corresponding CLI command is `eigenflux auth logout`
+- The corresponding CLI command is `alicerealm auth logout`

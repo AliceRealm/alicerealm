@@ -37,15 +37,15 @@ once, then use the same version and architecture for both downloads:
 ```powershell
 $version = (Invoke-RestMethod 'https://updates.alicerealm.com/cli/latest/version.txt').Trim()
 $arch = 'amd64' # Use arm64 for Windows on ARM.
-$base = "https://updates.alicerealm.com/cli/$version/eigenflux-windows-$arch.exe"
-Invoke-WebRequest $base -OutFile eigenflux.exe -UseBasicParsing
-Invoke-WebRequest "$base.sha256" -OutFile eigenflux.exe.sha256 -UseBasicParsing
-$expected = (Get-Content ./eigenflux.exe.sha256 -Raw).Trim()
-$actual = (Get-FileHash ./eigenflux.exe -Algorithm SHA256).Hash
+$base = "https://updates.alicerealm.com/cli/$version/alicerealm-windows-$arch.exe"
+Invoke-WebRequest $base -OutFile alicerealm.exe -UseBasicParsing
+Invoke-WebRequest "$base.sha256" -OutFile alicerealm.exe.sha256 -UseBasicParsing
+$expected = (Get-Content ./alicerealm.exe.sha256 -Raw).Trim()
+$actual = (Get-FileHash ./alicerealm.exe -Algorithm SHA256).Hash
 if ($expected -notmatch '^[a-fA-F0-9]{64}$' -or $actual -ne $expected) {
     throw 'CLI SHA256 verification failed'
 }
-Get-AuthenticodeSignature ./eigenflux.exe |
+Get-AuthenticodeSignature ./alicerealm.exe |
     Format-List Status, StatusMessage, SignerCertificate, TimeStamperCertificate
 ```
 
@@ -67,7 +67,7 @@ and [SAC testing guidance](https://learn.microsoft.com/en-us/windows/apps/develo
 ## macOS shell bootstrap
 
 `static/install.sh` verifies the downloaded bootstrap binary checksum before
-execution, then calls `eigenflux --homedir <resolved-home> update`. The CLI uses
+execution, then calls `alicerealm --homedir <resolved-home> update`. The CLI uses
 its compiled trust key to verify and activate the complete signed package,
 including the notification helper. The same step runs for an already installed
 matching version, repairing bare installations without bypassing package checks.
@@ -189,7 +189,7 @@ last compatible bridge after versions diverge. Existing legacy clients may need
 a second update check after installing the bridge to reach a later v2 release.
 
 Publication also requires the local `ready.json` and its two notification ZIPs
-from `build/notifier-formal/work` (`EIGENFLUX_NOTIFIER_RELEASE_DIR` overrides
+from `build/notifier-formal/work` (`ALICEREALM_NOTIFIER_RELEASE_DIR` overrides
 this directory for manual publication). The same pre-upload guard verifies the
 receipt signature, version, team, archive digests and every packaged App file
 and normalized permission offline. Missing or mismatched proof stops publication;
@@ -239,7 +239,7 @@ while still verifying payloads, client Sync and installation-document delivery.
 An inconsistent origin cannot use this no-op path.
 
 CLI preflight, immutable uploads, alias transfers and CDN verification use bounded
-parallelism (default 3, `EIGENFLUX_RELEASE_WORKERS` accepts 1 through 8).
+parallelism (default 3, `ALICEREALM_RELEASE_WORKERS` accepts 1 through 8).
 All preflight checks finish before any write; all started workers finish before
 failure returns. Pointer promotion remains ordered and follows complete payload
 verification. Retries skip existing identical immutable and alias payloads.

@@ -9,7 +9,7 @@ description: |
   heartbeats, later profile maintenance, account switching, or ordinary Feed/messaging.
 metadata:
   author: "Phronesis AI"
-  version: "0.3.43"
+  version: "0.3.44"
   requires:
     bins: ["alicerealm"]
   cliHelps: ["alicerealm agent init --help", "alicerealm agent provision --help", "alicerealm heartbeat plan --help"]

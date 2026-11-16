@@ -74,8 +74,8 @@ Or self-host them on the same server via Docker Compose (see `docker-compose.yml
 ### 2. Clone and Configure
 
 ```bash
-git clone https://github.com/your-org/eigenflux_server.git
-cd eigenflux_server
+git clone https://github.com/AliceRealm/alicerealm.git
+cd alicerealm
 
 cp .env.example .env
 ```
@@ -86,7 +86,7 @@ Edit `.env` with production values:
 APP_ENV=prod
 
 # Managed service endpoints
-PG_DSN=postgres://eigenflux:STRONG_PASSWORD@your-pg-host:5432/eigenflux?sslmode=require
+PG_DSN=postgres://alicerealm:STRONG_PASSWORD@your-pg-host:5432/alicerealm?sslmode=require
 REDIS_ADDR=your-redis-host:6379
 REDIS_PASSWORD=STRONG_REDIS_PASSWORD
 ES_URL=https://your-es-host:9200
@@ -139,8 +139,8 @@ All binaries are output to the `build/` directory.
 ### 5. Install systemd Services
 
 The project provides systemd unit templates in `cloud/systemd/`:
-- `eigenflux-etcd.service.tpl` — starts etcd via `docker-compose.cloud.yml`
-- `eigenflux-app@.service.tpl` — template unit for all application services
+- `alicerealm-etcd.service.tpl` — starts etcd via `docker-compose.cloud.yml`
+- `alicerealm-app@.service.tpl` — template unit for all application services
 
 Install them:
 
@@ -157,22 +157,22 @@ sudo ./scripts/cloud/restart_all_services.sh
 ```
 
 This starts the following systemd units in order:
-1. `eigenflux-etcd` — etcd (Docker Compose, for service discovery)
-2. `eigenflux-app@profile` — Profile RPC
-3. `eigenflux-app@item` — Item RPC
-4. `eigenflux-app@sort` — Sort RPC
-5. `eigenflux-app@feed` — Feed RPC
-6. `eigenflux-app@auth` — Auth RPC
-7. `eigenflux-app@api` — API Gateway
-8. `eigenflux-app@console` — Console API
-9. `eigenflux-app@pipeline` — Async pipeline consumers
-10. `eigenflux-app@cron` — Scheduled tasks
+1. `alicerealm-etcd` — etcd (Docker Compose, for service discovery)
+2. `alicerealm-app@profile` — Profile RPC
+3. `alicerealm-app@item` — Item RPC
+4. `alicerealm-app@sort` — Sort RPC
+5. `alicerealm-app@feed` — Feed RPC
+6. `alicerealm-app@auth` — Auth RPC
+7. `alicerealm-app@api` — API Gateway
+8. `alicerealm-app@console` — Console API
+9. `alicerealm-app@pipeline` — Async pipeline consumers
+10. `alicerealm-app@cron` — Scheduled tasks
 
 ### 7. Verify
 
 ```bash
 # Check all services are active
-sudo systemctl status eigenflux-etcd eigenflux-app@api
+sudo systemctl status alicerealm-etcd alicerealm-app@api
 
 # Test API
 curl https://api.yourdomain.com/api/v1/website/stats
@@ -184,8 +184,8 @@ curl https://api.yourdomain.com/api/v1/website/stats
 
 ```bash
 # systemd journal
-journalctl -u eigenflux-app@api -f
-journalctl -u eigenflux-app@pipeline -f
+journalctl -u alicerealm-app@api -f
+journalctl -u alicerealm-app@pipeline -f
 
 # Or check .log/ directory
 tail -f .log/api.log
@@ -194,7 +194,7 @@ tail -f .log/api.log
 ### Restart a Single Service
 
 ```bash
-sudo systemctl restart eigenflux-app@api
+sudo systemctl restart alicerealm-app@api
 ```
 
 ### Deploy Updates
@@ -213,36 +213,36 @@ sudo DEPLOY_USER=ecs-user ./scripts/cloud/install_main_deployer.sh
 Deploy and inspect its log:
 
 ```bash
-sudo systemctl start eigenflux-deploy-main.service
-journalctl -u eigenflux-deploy-main.service
+sudo systemctl start alicerealm-deploy-main.service
+journalctl -u alicerealm-deploy-main.service
 ```
 
 Do not run `git pull`, builds, migrations, or service restarts manually on the
 production host. Rollback is root-only and may target only a full commit SHA
 contained in `origin/main`; it rolls back application code but never reverses
 database migrations. The installer also redirects application units to
-root-owned artifacts under `/var/lib/eigenflux-deployer`; build all production
+root-owned artifacts under `/var/lib/alicerealm-deployer`; build all production
 services once before running the installer.
 
 The installer copies `.env` and the deployment user's existing `github.com`
-known-host entry into root-owned files under `/etc/eigenflux`. Verify the SSH
+known-host entry into root-owned files under `/etc/alicerealm`. Verify the SSH
 host key and production environment before installation; later configuration
 changes require a root operator.
 
 Application units use one root-owned binary/source bundle under
-`/var/lib/eigenflux-deployer/current`, so relative runtime assets and `.env`
+`/var/lib/alicerealm-deployer/current`, so relative runtime assets and `.env`
 are never loaded from the deployment checkout.
 
 After a successful health check, the deployer retains the active release and
 one previous complete release together with their source bundles. Older
 releases, failed-build work trees and other unreachable staging directories are
 removed while the deployment lock is held. This bounds
-`/var/lib/eigenflux-deployer` without touching the active executable paths;
+`/var/lib/alicerealm-deployer` without touching the active executable paths;
 rollback still rebuilds any commit contained in `origin/main`.
 
 The installer also migrates the private friend-request rate-limit file from
 `configs/pm/friend_request_limits.yaml` to the stable root-managed path
-`/etc/eigenflux/friend_request_limits.yaml` on first installation. Existing
+`/etc/alicerealm/friend_request_limits.yaml` on first installation. Existing
 files at the stable path are preserved on later installer runs. The PM service
 loads this stable path independently of the active immutable release.
 

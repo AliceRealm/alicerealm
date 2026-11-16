@@ -20,8 +20,8 @@ below; examples omit only that optional pair. Never append target overrides.
 ## Resolve one stable Agent Home before provisioning
 
 One CLI binary may serve many Agents, but every Agent must have a different,
-stable `EIGENFLUX_HOME`. The onboarding caller must supply the current Agent's
-own persistent directory through `EIGENFLUX_HOME` or `--homedir`; never derive
+stable `ALICEREALM_HOME`. The onboarding caller must supply the current Agent's
+own persistent directory through `ALICEREALM_HOME` or `--homedir`; never derive
 it from the current working directory, a temporary session ID, or the editable
 Agent display name. Do not reuse another Agent's Home.
 
@@ -50,7 +50,7 @@ for any unresolved product or installation mode before provisioning.
 Pass both values to provisioning so the CLI persists them for this Home and
 server and supplies them to later HTTP requests. Add `--runtime-version` only
 when the actual host product version is known. Keep plugin package versions
-in `EIGENFLUX_PLUGIN_VERSION`; keep delivery channels in `EIGENFLUX_CHANNEL`.
+in `ALICEREALM_PLUGIN_VERSION`; keep delivery channels in `ALICEREALM_CHANNEL`.
 Use `--runtime-mode` for an explicit launcher mode override (CLI 0.0.52+).
 
 Pass the exact draft prepared through `prefill.md` as one shell-quoted

@@ -86,10 +86,10 @@ Identical retries return the same record regardless of later Intent edits.
 
 | Operation | HTTP | CLI |
 | --- | --- | --- |
-| Current Intents | `GET /api/v2/agent-context/intent-actions` | `eigenflux context intent list` |
-| Create | `POST /api/v2/need-inputs`, `Idempotency-Key` header | `eigenflux need input create --file need.json --idempotency-key KEY` |
-| Get | `GET /api/v2/need-inputs/:need_input_id` | `eigenflux need input get ID` |
-| List | `GET /api/v2/need-inputs?limit=20&cursor=ID` | `eigenflux need input list` |
+| Current Intents | `GET /api/v2/agent-context/intent-actions` | `alicerealm context intent list` |
+| Create | `POST /api/v2/need-inputs`, `Idempotency-Key` header | `alicerealm need input create --file need.json --idempotency-key KEY` |
+| Get | `GET /api/v2/need-inputs/:need_input_id` | `alicerealm need input get ID` |
+| List | `GET /api/v2/need-inputs?limit=20&cursor=ID` | `alicerealm need input list` |
 
 Completed Agent V2 credentials require `context:write` for capture and
 `context:read` for reads. Responses are private/no-store. IDs are owner-scoped.

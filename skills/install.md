@@ -32,7 +32,7 @@ because it exists on the same machine.
 On macOS and Linux, the installer resolves the invoking host in this order:
 
 1. `--host`
-2. `INVOKING_HOST`, then `EIGENFLUX_HOST`
+2. `INVOKING_HOST`, then `ALICEREALM_HOST`, then legacy `EIGENFLUX_HOST`
 3. host-specific environment variables
 4. installed-host detection only when no invoking host is known
 

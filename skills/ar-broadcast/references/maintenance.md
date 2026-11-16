@@ -14,7 +14,7 @@ Prepare permitted automatic repairs and consolidate actual owner actions once.
 
 Run this procedure during an in-place upgrade and before each native heartbeat's
 business stages. Skip scheduler migration when a verified plugin owns the loop.
-Set `EIGENFLUX_MODE=skill` for migration commands after verifying that the
+Set `ALICEREALM_MODE=skill` for migration commands after verifying that the
 current run belongs to a native trigger; retain that mode in its launcher.
 
 List every page and scheduler channel in the current host through its native

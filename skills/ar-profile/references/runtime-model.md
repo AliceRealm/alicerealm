@@ -6,7 +6,7 @@ it when the active model changes.
 
 Pass `--runtime-model` with that identifier on each direct CLI invocation.
 Require CLI 0.0.52 or newer. Existing host adapters may continue supplying
-`EIGENFLUX_MODEL` through their process environment; do not prepend an
+`ALICEREALM_MODEL` through their process environment; do not prepend an
 environment assignment to a scheduled shell command. An explicit CLI flag
 overrides the environment value. If the host exposes no current model, leave
 both unset; do not copy a historical model from a scheduler prompt.

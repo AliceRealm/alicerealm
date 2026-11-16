@@ -266,7 +266,7 @@ or staging. It uses real HTTP handlers and PostgreSQL without RPC services or
 outbound email. Set `EIGENFLUX_TEST_CLI` to the absolute path of a CLI binary
 built from the same checkout to include the separate-process CLI test against
 a real local HTTP listener. Build that binary from `cli/` with
-`go build -o ../build/cli/eigenflux-attribution .`. The installer shell tests use
+`go build -o ../build/cli/alicerealm-attribution .`. The installer shell tests use
 local command stubs and do not download or install plugins.
 
 ```bash
@@ -326,7 +326,7 @@ Run `go test ./rpc/sort/... ./rpc/feed/... ./pkg/replaylog ./api/consolev2 ./pip
 
 Real-store tests require `DISCOVERY_TEST_DSN` (an isolated migrated PostgreSQL database), `DISCOVERY_TEST_ES` (isolated Elasticsearch URL), and `DISCOVERY_TEST_REDIS` (isolated Redis address). Run `go test ./rpc/sort/discovery ./pipeline/consumer -run 'TestPostgres|TestDiscoveryReplayPostgres' -count=1`. These tests use temporary schemas/indices and fixture rows; do not point them at production or run alongside integration suites that reset the same database. Agent projection and ranking hydration use real stores; Commission catalogue/statistics snapshots are fixtures written through the projection store. Validating remote Commission event production remains a cutover check.
 
-CLI checks run in the independent `cli` module: `go test ./cmd ./internal/client ./internal/cache ./internal/feedevent`. Signed release builds still use the existing signing workflow; a local compilation uses `go build -o ../build/eigenflux-cli .`.
+CLI checks run in the independent `cli` module: `go test ./cmd ./internal/client ./internal/cache ./internal/feedevent`. Signed release builds still use the existing signing workflow; a local compilation uses `go build -o ../build/alicerealm-cli .`.
 
 For asynchronous Need vectors, migrate the isolated database through 000110 and
 set `DISCOVERY_TEST_REDIS` to its loopback Redis address. Run
@@ -357,7 +357,7 @@ On Windows, build the CLI and run the download suite:
 ```powershell
 New-Item -ItemType Directory -Force build | Out-Null
 Push-Location cli
-go build -o ../build/eigenflux.exe .
+go build -o ../build/alicerealm.exe .
 Pop-Location
 python -m unittest discover -s tests/cli_release -p 'test_windows_download.py'
 python -m unittest discover -s tests/cli_release -p 'test_windows_attribution.py'
@@ -421,7 +421,7 @@ JSON rendering, contract hashes/content/retention/write-failure fallback and
 160 pre-upgrade exposures that remain pending without being re-handed.
 
 With isolated migrated infrastructure and built services, run
-`DISCOVERY_E2E=1 EIGENFLUX_TEST_CLI="$PWD/build/cli/eigenflux-darwin-arm64"
+`DISCOVERY_E2E=1 EIGENFLUX_TEST_CLI="$PWD/build/cli/alicerealm-darwin-arm64"
 ./tests/run.sh --skip-start discoverye2e -c TestFeedCLISavedBatchesKeepOneExposureSet`
 (select the binary for your platform). This suite starts its own application
 processes. It scores a batch, reads two saved batches, then polls locally and
@@ -429,8 +429,8 @@ checks the real replay/feedback rows retain the single original impression.
 It also reads the next batch in agent format, verifies the referenced served
 contract file and re-hands a skipped item without creating a new exposure.
 
-Build the CLI with `cd cli && go build -o ../build/eigenflux-cli .`, then run
-`EIGENFLUX_TEST_CLI="$PWD/build/eigenflux-cli" ./tests/run.sh --skip-start e2e -c TestCLIFeedbackProcessRecovery`
+Build the CLI with `cd cli && go build -o ../build/alicerealm-cli .`, then run
+`EIGENFLUX_TEST_CLI="$PWD/build/alicerealm-cli" ./tests/run.sh --skip-start e2e -c TestCLIFeedbackProcessRecovery`
 from the repository root. This acceptance test kills a real CLI process after
 the local API accepts feedback but before the response reaches the client. The
 restarted CLI drains the durable queue; the real worker stores one feedback row
