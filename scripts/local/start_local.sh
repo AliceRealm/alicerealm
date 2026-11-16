@@ -35,6 +35,7 @@ ETCD_PORT="${ETCD_PORT:-2379}"
 ELASTICSEARCH_HTTP_PORT="${ELASTICSEARCH_HTTP_PORT:-9200}"
 KIBANA_PORT="${KIBANA_PORT:-5601}"
 PROJECT_NAME="${PROJECT_NAME:-myhub}"
+LOCAL_ENABLE_KIBANA="${LOCAL_ENABLE_KIBANA:-false}"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -61,7 +62,10 @@ start_docker_services() {
   echo -e "${CYAN}=== Starting Docker dependency services ===${NC}"
   echo -e "  Compose Project: ${CYAN}${PROJECT_NAME}${NC}"
 
-  local services="postgres redis etcd elasticsearch kibana"
+  local services="postgres redis etcd elasticsearch"
+  if [[ "$LOCAL_ENABLE_KIBANA" == "true" ]]; then
+    services="$services kibana"
+  fi
 
   dc up -d $services
 
@@ -70,7 +74,7 @@ start_docker_services() {
 
   # PostgreSQL
   local retries=0
-  while ! dc exec -T postgres pg_isready -U eigenflux -d eigenflux > /dev/null 2>&1; do
+  while ! dc exec -T postgres pg_isready -U alicerealm -d alicerealm > /dev/null 2>&1; do
     retries=$((retries+1))
     [[ $retries -gt 30 ]] && echo -e "${RED}✗ PostgreSQL startup timeout${NC}" && exit 1
     sleep 1
@@ -104,14 +108,19 @@ start_docker_services() {
   done
   echo -e "  ${GREEN}✓ Elasticsearch ready${NC}"
 
-  # Kibana
-  retries=0
-  while ! curl -s "http://localhost:${KIBANA_PORT}/api/status" > /dev/null 2>&1; do
-    retries=$((retries+1))
-    [[ $retries -gt 60 ]] && echo -e "${RED}✗ Kibana startup timeout${NC}" && exit 1
-    sleep 2
-  done
-  echo -e "  ${GREEN}✓ Kibana ready${NC}"
+  # Kibana is optional because it is not needed by the application and is
+  # expensive on low-memory development machines.
+  if [[ "$LOCAL_ENABLE_KIBANA" == "true" ]]; then
+    retries=0
+    while ! curl -s "http://localhost:${KIBANA_PORT}/api/status" > /dev/null 2>&1; do
+      retries=$((retries+1))
+      [[ $retries -gt 60 ]] && echo -e "${RED}✗ Kibana startup timeout${NC}" && exit 1
+      sleep 2
+    done
+    echo -e "  ${GREEN}✓ Kibana ready${NC}"
+  else
+    echo -e "  ${YELLOW}Kibana skipped (set LOCAL_ENABLE_KIBANA=true to enable)${NC}"
+  fi
 
   echo ""
 }
@@ -132,11 +141,13 @@ check_dependencies() {
     echo -e "${GREEN}✓ Elasticsearch running${NC}"
   fi
 
-  if ! curl -s "http://localhost:${KIBANA_PORT}/api/status" > /dev/null 2>&1; then
-    echo -e "${RED}✗ Kibana not running${NC}"
-    all_ok=false
-  else
-    echo -e "${GREEN}✓ Kibana running${NC}"
+  if [[ "$LOCAL_ENABLE_KIBANA" == "true" ]]; then
+    if ! curl -s "http://localhost:${KIBANA_PORT}/api/status" > /dev/null 2>&1; then
+      echo -e "${RED}✗ Kibana not running${NC}"
+      all_ok=false
+    else
+      echo -e "${GREEN}✓ Kibana running${NC}"
+    fi
   fi
 
   if ! is_service_running "postgres"; then
