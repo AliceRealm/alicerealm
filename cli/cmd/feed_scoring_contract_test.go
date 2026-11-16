@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/output"
+	"github.com/AliceRealm/alicerealm/cli/internal/output"
 )
 
 func TestFeedScoringFallbackContract(t *testing.T) {

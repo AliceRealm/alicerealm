@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"github.com/GardenVilla/alicerealm/cli/internal/desktopnotify"
-	"github.com/GardenVilla/alicerealm/cli/internal/desktopqueue"
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/desktopnotify"
+	"github.com/AliceRealm/alicerealm/cli/internal/desktopqueue"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
 	"context"
 	"encoding/json"
 	"errors"

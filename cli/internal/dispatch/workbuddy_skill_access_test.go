@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/skills"
+	"github.com/AliceRealm/alicerealm/cli/internal/skills"
 )
 
 func workBuddySkillFixture(t *testing.T) (Runner, Request, string) {

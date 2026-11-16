@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"alicerealm_server/pkg/db"
-	"alicerealm_server/pkg/logger"
+	"eigenflux_server/pkg/db"
+	"eigenflux_server/pkg/logger"
 )
 
 const (

@@ -52,9 +52,9 @@ Write a binding JSON file using these fields:
 ```
 
 ```sh
-eigenflux watch bind --config /absolute/path/to/binding.json
-eigenflux watch doctor
-eigenflux watch --dispatch
+alicerealm watch bind --config /absolute/path/to/binding.json
+alicerealm watch doctor
+alicerealm watch --dispatch
 ```
 
 `doctor` checks configuration only; `status` shows redacted execution state. Neither proves live Agent execution. CLI checks fresh `auto_reply_pm` before invoking the Agent and before sending; disabled permission yields `needs_user`.
@@ -150,13 +150,13 @@ Stop the old account's plugin/message consumer before starting dispatch. Keep th
 Stop watch before mutating bind/retry/reconcile; read-only `watch bind --preflight` keeps it running. Retry only `failed` or `needs_user`; inspect host/business results before reconciling `unknown/failed/needs_user` work:
 
 ```sh
-eigenflux watch status
-eigenflux watch retry JOB_ID
-eigenflux watch reconcile JOB_ID --outcome replied --reply-id VERIFIED_MESSAGE_ID --verified
-eigenflux watch reconcile JOB_ID --outcome no_reply --verified
+alicerealm watch status
+alicerealm watch retry JOB_ID
+alicerealm watch reconcile JOB_ID --outcome replied --reply-id VERIFIED_MESSAGE_ID --verified
+alicerealm watch reconcile JOB_ID --outcome no_reply --verified
 # Optional events in unknown/failed/needs_user:
-eigenflux watch reconcile JOB_ID --outcome completed --verified
-eigenflux watch reconcile JOB_ID --outcome failed --verified
+alicerealm watch reconcile JOB_ID --outcome completed --verified
+alicerealm watch reconcile JOB_ID --outcome failed --verified
 ```
 
 Reconciliation records the operator's conclusion, including PMs already handled manually. Explicit profile retry bypasses its prior claim cooldown; ordinary scheduled reviews keep that cooldown. Legacy `unknown` work is never automatically resent; verified fulfillment delivery retries follow the bounded recovery below. Optional events without completion evidence remain `needs_user`; inspect before retry. Reconcile as `failed` only after confirming work did not complete; retry stays explicit. Legacy `accepted` records are unverified.
@@ -417,7 +417,7 @@ session ID, workspace, port and token-file path in this binding configuration:
   "events": ["commission_order"],
   "main_session_id": "EXISTING_HERMES_SESSION_ID",
   "main_command": [
-    "/absolute/path/to/eigenflux", "watch", "acp-bridge",
+    "/absolute/path/to/alicerealm", "watch", "acp-bridge",
     "--host", "hermes",
     "--owner-url", "ws://127.0.0.1:9000/api/ws",
     "--main-session-id", "EXISTING_HERMES_SESSION_ID",
@@ -543,7 +543,7 @@ that acceptance or install/restart the local package.
 ## WorkBuddy host execution bridge (experimental macOS)
 
 Bind ordinary execution as `mode: acp`, `host: workbuddy`, with command argv
-`["/absolute/path/to/eigenflux", "watch", "workbuddy-acp"]`. Keep the account's
+`["/absolute/path/to/alicerealm", "watch", "workbuddy-acp"]`. Keep the account's
 Home, server, signed Skills and WorkDir pinned through the existing binding.
 The CLI discovers the unique same-user native Sidecar and asks it to start a
 fresh isolated worker with WorkBuddy's native child bootstrap and product config.

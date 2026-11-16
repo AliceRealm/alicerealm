@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/mainbridge"
+	"github.com/AliceRealm/alicerealm/cli/internal/mainbridge"
 	"github.com/spf13/cobra"
 )
 

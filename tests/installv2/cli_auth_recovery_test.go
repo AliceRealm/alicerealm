@@ -25,9 +25,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	redis "github.com/redis/go-redis/v9"
 
-	"alicerealm_server/api/consolev2"
-	"alicerealm_server/api/install"
-	"alicerealm_server/pkg/config"
+	"eigenflux_server/api/consolev2"
+	"eigenflux_server/api/install"
+	"eigenflux_server/pkg/config"
 )
 
 // Exercise automatic and explicit CLI recovery with public registration on and
@@ -234,7 +234,7 @@ func testCLIExpiredV2CredentialsRecoverSameAccount(t *testing.T, binary string, 
 				if err := json.Unmarshal([]byte(lines[len(lines)-1]), &notice); err != nil {
 					t.Fatalf("missing authentication notice: %v stderr=%s", err, stderr)
 				}
-				if notice.SchemaVersion != "alicerealm_auth_required.v1" || !notice.NotificationRequired || !notice.ChecksBlocked || notice.Home != home || notice.Server != "alicerealm" || notice.Code != "REFRESH_INVALID" {
+				if notice.SchemaVersion != "eigenflux_auth_required.v1" || !notice.NotificationRequired || !notice.ChecksBlocked || notice.Home != home || notice.Server != "alicerealm" || notice.Code != "REFRESH_INVALID" {
 					t.Fatalf("incorrect revoked-session notice: %+v", notice)
 				}
 				if registrationCalls.Load() != 0 || recoveryCalls.Load() != 0 || provisionCalls.Load() != 0 || capabilityCalls.Load() != 0 {

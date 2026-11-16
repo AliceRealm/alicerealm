@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
 )
 
 func TestStableEntryIsUsedByPersistedCommands(t *testing.T) {

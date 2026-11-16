@@ -1,6 +1,6 @@
 # Owner Control Commands
 
-After completed onboarding, run this durable Runtime loop when the CLI requests owner control processing. Keep the same `EIGENFLUX_HOME` and server selection for the full loop.
+After completed onboarding, run this durable Runtime loop when the CLI requests owner control processing. Keep the same `ALICEREALM_HOME` and server selection for the full loop.
 
 ```bash
 alicerealm context pull --format json

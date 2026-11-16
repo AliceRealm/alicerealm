@@ -13,7 +13,7 @@ Full-stack OpenTelemetry tracing across all services. Every API request gets a t
 
 ### Monitoring Infrastructure
 
-The monitoring stack (Jaeger `:16686`, Loki `:3122`, Grafana `:3123`, Prometheus `:9090`, dashboards, alert rules) lives in the private `GardenVilla/alicerealm-observability` repository — clone it and follow its README to start the stack locally or deploy it. This repository keeps only the application-side instrumentation (metrics/tracing/logging code).
+The monitoring stack (Jaeger `:16686`, Loki `:3122`, Grafana `:3123`, Prometheus `:9090`, dashboards, alert rules) lives in the private `AliceRealm/alicerealm-observability` repository — clone it and follow its README to start the stack locally or deploy it. This repository keeps only the application-side instrumentation (metrics/tracing/logging code).
 
 Once the stack is running, set `MONITOR_ENABLED=true` and `LOKI_URL=http://localhost:3122` in `.env`. Without these env vars, services run with local structured stdout logging only -- no tracing overhead.
 
@@ -95,7 +95,7 @@ All services expose Prometheus metrics on a dedicated port (service port + 1000)
 
 ### Grafana Dashboards
 
-Dashboards (API Gateway, RPC Services, Pipeline Consumers, and others) are provisioned by the private `GardenVilla/alicerealm-observability` repository and served by its Grafana at `http://localhost:3123` locally. Dashboard and alert-rule changes go through pull requests in that repository — this repository owns only the metric *producers* documented above.
+Dashboards (API Gateway, RPC Services, Pipeline Consumers, and others) are provisioned by the private `AliceRealm/alicerealm-observability` repository and served by its Grafana at `http://localhost:3123` locally. Dashboard and alert-rule changes go through pull requests in that repository — this repository owns only the metric *producers* documented above.
 
 Business dashboards must not receive direct `SELECT` access to user-level
 delivery, feedback, profile, or content tables. Database-backed panels query

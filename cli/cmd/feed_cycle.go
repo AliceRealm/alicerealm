@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/feedevent"
+	"github.com/AliceRealm/alicerealm/cli/internal/feedevent"
 )
 
 func feedCycleOrigin() string {

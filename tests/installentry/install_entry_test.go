@@ -13,7 +13,7 @@ import (
 )
 
 func TestAGTIInstallationHandoff(t *testing.T) {
-	const installURL = "https://github.com/GardenVilla/alicerealm/blob/main/skills/install.md"
+	const installURL = "https://github.com/AliceRealm/alicerealm/blob/main/skills/install.md"
 	for _, name := range []string{"agti_skills.tmpl.md", "agti_join.tmpl.md", "agti_interpret.tmpl.md"} {
 		for _, ref := range []string{"", "campaign_01"} {
 			t.Run(name+"/"+ref, func(t *testing.T) {
@@ -28,7 +28,7 @@ func TestAGTIInstallationHandoff(t *testing.T) {
 				require.NoError(t, err)
 				doc := rendered.String()
 				assert.Contains(t, doc, installURL)
-				assert.NotContains(t, doc, "Read https://github.com/GardenVilla/alicerealm and")
+				assert.NotContains(t, doc, "Read https://github.com/AliceRealm/alicerealm and")
 				assert.NotContains(t, doc, "curl -fsSL")
 				assert.NotContains(t, doc, "eigenflux agent provision")
 				assert.NotContains(t, doc, "--ref "+ref)
@@ -51,7 +51,7 @@ func TestAGTIInstallationHandoff(t *testing.T) {
 }
 
 func TestBootstrapEntryDelegatesInstallation(t *testing.T) {
-	const installURL = "https://github.com/GardenVilla/alicerealm/blob/main/skills/install.md"
+	const installURL = "https://github.com/AliceRealm/alicerealm/blob/main/skills/install.md"
 	bootstrap, err := os.ReadFile(filepath.Join("..", "..", "static", "BOOTSTRAP.md"))
 	require.NoError(t, err)
 	assert.Contains(t, string(bootstrap), installURL)

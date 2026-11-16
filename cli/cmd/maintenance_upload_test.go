@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/client"
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/client"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
 )
 
 func TestMaintenanceFailureMetadataUploadsToStrictOldGatewayWithoutBlockingQueue(t *testing.T) {

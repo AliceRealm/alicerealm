@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('release_plan', ROOT / 'cli/scripts/release-plan.py')
 plan = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(plan)
-REPO = 'GardenVilla/alicerealm'
+REPO = 'AliceRealm/alicerealm'
 HEAD = 'a' * 40
 BEFORE = 'b' * 40
 

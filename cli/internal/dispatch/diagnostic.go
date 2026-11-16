@@ -6,8 +6,8 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/mainbridge"
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/mainbridge"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
 )
 
 // DiagnosticError retains fixed diagnostic categories without storing tool input,

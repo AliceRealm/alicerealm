@@ -8,7 +8,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/skills"
+	"github.com/AliceRealm/alicerealm/cli/internal/skills"
 )
 
 func main() {

@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/desktopnotify"
-	"github.com/GardenVilla/alicerealm/cli/internal/desktopqueue"
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/desktopnotify"
+	"github.com/AliceRealm/alicerealm/cli/internal/desktopqueue"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
 )
 
 func failPMPrompt(t *testing.T, f *dispatchWatchFixture, id string) dispatch.Job {

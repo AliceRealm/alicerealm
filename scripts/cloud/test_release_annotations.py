@@ -17,7 +17,7 @@ def event(event_id='instrument-check', scope='api'):
     return dict(id=event_id, kind='instrumentation', deploy_scope=scope,
                 dashboards=['card-refresh'], title='检查完成开始记录',
                 description='旧客户端可能不完整；人工检查不算',
-                pr='https://github.com/GardenVilla/alicerealm/pull/400')
+                pr='https://github.com/AliceRealm/alicerealm/pull/400')
 
 
 class MemoryGrafana:

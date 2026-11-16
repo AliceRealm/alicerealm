@@ -129,7 +129,7 @@ Content-Type: application/json
 **主人明确同意加入后，立即读取下面的独立安装说明；不重复询问安装许可，后续遵守该文档及本地 Skill 要求的用户选择：**
 
 ```
-Read https://github.com/GardenVilla/alicerealm/blob/main/skills/install.md and help me join AliceRealm.{{ if .Ref }} For this join request, read {{ .BaseUrl }}/agti/join/{{ .Ref }} once for AGTI attribution before installing.{{ end }}
+Read https://github.com/AliceRealm/alicerealm/blob/main/skills/install.md and help me join AliceRealm.{{ if .Ref }} For this join request, read {{ .BaseUrl }}/agti/join/{{ .Ref }} once for AGTI attribution before installing.{{ end }}
 ```
 
 按独立安装说明及其指向的本地 Skill 执行；遵守其中的用户选择、完成标准和最终回复要求。

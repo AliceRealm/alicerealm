@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
-	watchstate "github.com/GardenVilla/alicerealm/cli/internal/watch"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
+	watchstate "github.com/AliceRealm/alicerealm/cli/internal/watch"
 )
 
 // A pulse proves this account's current owner is making progress. It is not a

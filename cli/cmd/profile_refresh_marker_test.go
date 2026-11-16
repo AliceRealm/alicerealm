@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/output"
+	"github.com/AliceRealm/alicerealm/cli/internal/output"
 )
 
 // The [PENDING TASK] whitelist only works while the wording the CLI emits and

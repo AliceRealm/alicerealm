@@ -12,10 +12,10 @@ The browser handoff requires CLI version 0.0.107 or later.
 ## Commands
 
 ```text
-eigenflux wallet kyc get --format json
-eigenflux wallet kyc start --stdin --idempotency-key <attempt-key> --format json
-eigenflux wallet kyc authorize <verification-id> --format json
-eigenflux wallet kyc complete <verification-id> --stdin --idempotency-key <completion-key> --format json
+alicerealm wallet kyc get --format json
+alicerealm wallet kyc start --stdin --idempotency-key <attempt-key> --format json
+alicerealm wallet kyc authorize <verification-id> --format json
+alicerealm wallet kyc complete <verification-id> --stdin --idempotency-key <completion-key> --format json
 ```
 
 `start` reads exactly one JSON object from stdin:
@@ -99,7 +99,7 @@ From `cli/`:
 go test ./...
 go test -race ./cmd -run TestWalletKYC -count=1
 go vet ./...
-go build -o ../build/cli/eigenflux-kyc .
+go build -o ../build/cli/alicerealm-kyc .
 ```
 
 Tests use local HTTP fixtures and temporary Agent Homes, not live identity data

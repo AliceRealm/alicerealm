@@ -42,9 +42,9 @@ func TestInstallerPersistsRefBeforeImmediateOrDeferredProvision(t *testing.T) {
 				t.Fatal(err)
 			}
 			logPath := filepath.Join(home, "cli.log")
-			writeInstallerStub(t, filepath.Join(binDir, "eigenflux"), `#!/bin/sh
+			writeInstallerStub(t, filepath.Join(binDir, "alicerealm"), `#!/bin/sh
 set -eu
-printf 'home=<%s>' "${EIGENFLUX_HOME:-}" >> "$TEST_CLI_LOG"
+printf 'home=<%s>' "${ALICEREALM_HOME:-}" >> "$TEST_CLI_LOG"
 for arg do printf ' <%s>' "$arg" >> "$TEST_CLI_LOG"; done
 printf '\n' >> "$TEST_CLI_LOG"
 if [ "${1:-}" = version ]; then printf '99.0.0\n'; fi
@@ -70,10 +70,10 @@ esac
 					t.Fatal(err)
 				}
 			}
-			agentHome := filepath.Join(home, ".eigenflux-codex", ".eigenflux")
+			agentHome := filepath.Join(home, ".alicerealm-codex", ".alicerealm")
 			args := append([]string{installer, "--host", "codex"}, test.args...)
 			if test.wantHomeFlag {
-				agentHome = filepath.Join(home, "explicit agent", ".eigenflux")
+				agentHome = filepath.Join(home, "explicit agent", ".alicerealm")
 				args = append(args, "--homedir", agentHome)
 			}
 			endpoint := test.endpoint
@@ -88,17 +88,17 @@ esac
 			command.Env = append(os.Environ(),
 				"HOME="+home,
 				"PATH="+binDir+string(os.PathListSeparator)+"/usr/bin:/bin",
-				"EIGENFLUX_HOME=",
-				"EIGENFLUX_HOST=",
-				"EIGENFLUX_CDN_URL=https://cdn.invalid",
-				"EIGENFLUX_API_URL="+endpoint,
-				"EIGENFLUX_INSTALL_DIR="+binDir,
-				"EIGENFLUX_SKIP_AGENT_SETUP=1",
-				"EIGENFLUX_SETUP_HOSTS=",
-				"EIGENFLUX_BOOTSTRAP_GRANT=",
-				"EIGENFLUX_BOOTSTRAP_NONCE=",
-				"EIGENFLUX_ONBOARDING_DRAFT_FILE="+draftPath,
-				"EIGENFLUX_AGENT_NAME="+test.agentName,
+				"ALICEREALM_HOME=",
+				"ALICEREALM_HOST=",
+				"ALICEREALM_CDN_URL=https://cdn.invalid",
+				"ALICEREALM_API_URL="+endpoint,
+				"ALICEREALM_INSTALL_DIR="+binDir,
+				"ALICEREALM_SKIP_AGENT_SETUP=1",
+				"ALICEREALM_SETUP_HOSTS=",
+				"ALICEREALM_BOOTSTRAP_GRANT=",
+				"ALICEREALM_BOOTSTRAP_NONCE=",
+				"ALICEREALM_ONBOARDING_DRAFT_FILE="+draftPath,
+				"ALICEREALM_AGENT_NAME="+test.agentName,
 				"TEST_CLI_LOG="+logPath,
 				"TEST_SAVE_FAILS="+saveFails,
 			)

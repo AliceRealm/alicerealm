@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"alicerealm_server/pkg/db"
-	"alicerealm_server/pkg/logger"
+	"eigenflux_server/pkg/db"
+	"eigenflux_server/pkg/logger"
 )
 
 // --- Xiaohongshu 聚光 conversion callback (Loop B) ---

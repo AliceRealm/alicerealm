@@ -19,16 +19,16 @@ func TestInstallerAgentHomePrecedenceAndHostIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read installer: %v", err)
 	}
-	const functionStart = "resolve_eigenflux_home() {"
+	const functionStart = "resolve_alicerealm_home() {"
 	const functionEnd = "\n}\n\n# Hosts present"
 	installerSource := string(installerBody)
 	start := strings.Index(installerSource, functionStart)
 	if start < 0 {
-		t.Fatal("could not extract resolve_eigenflux_home from installer")
+		t.Fatal("could not extract resolve_alicerealm_home from installer")
 	}
 	endOffset := strings.Index(installerSource[start:], functionEnd)
 	if endOffset < 0 {
-		t.Fatal("could not find the end of resolve_eigenflux_home in installer")
+		t.Fatal("could not find the end of resolve_alicerealm_home in installer")
 	}
 	resolver := installerSource[start : start+endOffset+2]
 	home := t.TempDir()
@@ -41,18 +41,18 @@ func TestInstallerAgentHomePrecedenceAndHostIsolation(t *testing.T) {
 	}{
 		{name: "homedir flag wins", flag: "/flag/identity", explicitEnv: "/env/identity", host: "codex", want: "/flag/identity"},
 		{name: "environment wins over host", explicitEnv: "/env/identity", host: "openclaw", want: "/env/identity"},
-		{name: "codex ignores coexisting openclaw", host: "codex", want: filepath.Join(home, ".eigenflux-codex", ".eigenflux")},
-		{name: "INVOKING_HOST environment selects codex", invokingEnv: "codex", want: filepath.Join(home, ".eigenflux-codex", ".eigenflux")},
-		{name: "openclaw uses openclaw home", host: "openclaw", want: filepath.Join(home, ".openclaw", ".eigenflux")},
-		{name: "claude uses default home", host: "claude-code", want: filepath.Join(home, ".eigenflux")},
+		{name: "codex ignores coexisting openclaw", host: "codex", want: filepath.Join(home, ".alicerealm-codex", ".alicerealm")},
+		{name: "INVOKING_HOST environment selects codex", invokingEnv: "codex", want: filepath.Join(home, ".alicerealm-codex", ".alicerealm")},
+		{name: "openclaw uses openclaw home", host: "openclaw", want: filepath.Join(home, ".openclaw", ".alicerealm")},
+		{name: "claude uses default home", host: "claude-code", want: filepath.Join(home, ".alicerealm")},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			command := exec.Command("sh", "-c", resolver+`; resolved_host="$TEST_HOST"; if [ -n "$TEST_INVOKING_ENV" ]; then resolved_host="$INVOKING_HOST"; fi; resolve_eigenflux_home "$TEST_FLAG" "$TEST_ENV_HOME" "$resolved_host"`)
+			command := exec.Command("sh", "-c", resolver+`; resolved_host="$TEST_HOST"; if [ -n "$TEST_INVOKING_ENV" ]; then resolved_host="$INVOKING_HOST"; fi; resolve_alicerealm_home "$TEST_FLAG" "$TEST_ENV_HOME" "$resolved_host"`)
 			command.Env = append(os.Environ(),
 				"HOME="+home,
-				"EIGENFLUX_HOME=",
-				"EIGENFLUX_HOST=",
+				"ALICEREALM_HOME=",
+				"ALICEREALM_HOST=",
 				"CLAUDECODE=",
 				"CODEX_THREAD_ID=",
 				"CODEX_SANDBOX=",

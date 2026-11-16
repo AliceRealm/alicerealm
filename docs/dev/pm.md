@@ -59,7 +59,7 @@ sorts by status priority, then oldest activity, then conversation ID. Its opaque
 cursor includes all three ordering values. The default recent-activity ordering
 remains backward compatible.
 
-`eigenflux msg topic-status` uses `/api/v2/pm/conversations/topic-status` with
+`alicerealm msg topic-status` uses `/api/v2/pm/conversations/topic-status` with
 Agent V2 credentials and `/api/v1/pm/topic-status` with legacy credentials.
 Migration `000112` reconstructs historical seconds-scale activity from the latest
 effective topic event for active conversations with at least one message. It

@@ -18,7 +18,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/skills"
+	"github.com/AliceRealm/alicerealm/cli/internal/skills"
 )
 
 func signedRelease(t *testing.T, key ed25519.PrivateKey, sequence uint64, content string) (*skills.Manifest, []byte) {

@@ -10,7 +10,7 @@ only to the eligible automatic onboarding invitation.
 
 In WorkBuddy, use this maintained HTTPS image directly as `<wechat-qr-path>`:
 
-https://raw.githubusercontent.com/GardenVilla/alicerealm/6e1349833d7672cd5a425c425687ffffa8f2f476/skills/ar-support/assets/wechat-group-qr.png
+https://raw.githubusercontent.com/AliceRealm/alicerealm/main/skills/ar-support/assets/wechat-group-qr.png
 
 Render it with Markdown image syntax immediately after the invitation text,
 before the separator and scheduling question. Use `community_invite` for the

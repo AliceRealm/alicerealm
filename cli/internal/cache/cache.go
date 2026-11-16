@@ -9,7 +9,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
 )
 
 const (

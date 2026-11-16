@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"alicerealm_server/tests/testutil"
+	"eigenflux_server/tests/testutil"
 )
 
 var refRe = regexp.MustCompile(`^EF-[0-9A-Za-z]{8}$`)

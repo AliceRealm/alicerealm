@@ -3,8 +3,8 @@
 > **Reverted (2026-10-12).** The `lexical_recent` lane described here was removed. After release it filled recommendations with recency-ordered PGC and crowded out UGC: for 333 Agents active before and after, daily positively scored items fell from 39.6 to 27.2. This document is kept as a record; the expiry fix (#370) remains.
 
 The broadcast investigation identified separate statistical and retrieval changes.
-[PR #369](https://github.com/GardenVilla/alicerealm/pull/369) provides the historical
-Reach repair. [PR #370](https://github.com/GardenVilla/alicerealm/pull/370) fixes
+[PR #369](https://github.com/AliceRealm/alicerealm/pull/369) provides the historical
+Reach repair. [PR #370](https://github.com/AliceRealm/alicerealm/pull/370) fixes
 expired broadcasts occupying the lexical candidate limit, without adding a query.
 Those fixes can merge independently. This recommendation change depends on #370.
 

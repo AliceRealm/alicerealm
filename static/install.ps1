@@ -13,7 +13,7 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
 $CdnUrl = if ($env:ALICEREALM_CDN_URL) { $env:ALICEREALM_CDN_URL } else { "https://updates.alicerealm.com" }
-$GithubRepo = "GardenVilla/alicerealm"
+$GithubRepo = "AliceRealm/alicerealm"
 $Branch = "main"
 $ExplicitEigenfluxHome = $env:ALICEREALM_HOME
 if (-not $Endpoint) {

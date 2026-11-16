@@ -9,7 +9,7 @@ DEPLOY_USER='@@DEPLOY_USER@@'
 DEPLOY_HOME='@@DEPLOY_HOME@@'
 # The repository is public, so a fixed HTTPS URL avoids depending on mutable
 # per-user SSH identity configuration while Git config remains fully disabled.
-OFFICIAL_REMOTE='https://github.com/GardenVilla/alicerealm.git'
+OFFICIAL_REMOTE='https://github.com/AliceRealm/alicerealm.git'
 LOCK_FILE='/run/lock/alicerealm-deploy-main.lock'
 STATE_DIR='/var/lib/alicerealm-deployer'
 RUNTIME_ENV='/etc/alicerealm/runtime.env'

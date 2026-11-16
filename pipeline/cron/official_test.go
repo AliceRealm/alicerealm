@@ -39,7 +39,7 @@ func TestOfficialPromptRenders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("render official: %v", err)
 	}
-	if !strings.Contains(out, "EigenFlux") || !strings.Contains(out, "UNIQUE_TASK_MARKER") {
+	if !strings.Contains(out, "AliceRealm") || !strings.Contains(out, "UNIQUE_TASK_MARKER") {
 		t.Fatalf("rendered prompt missing role text or task: %q", out)
 	}
 }

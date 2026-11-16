@@ -212,7 +212,7 @@ class SequenceTests(unittest.TestCase):
             fake_gh.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
             fake_gh.chmod(0o700)
             result = subprocess.run(["/bin/bash", str(ROOT / "cli/scripts/release-skills.sh")], env={"PATH": temp + ":/usr/bin:/bin"}, check=True, capture_output=True, text=True)
-            self.assertEqual(result.stdout.splitlines(), ["workflow", "run", "release-skills.yml", "--repo", "GardenVilla/alicerealm", "--ref", "main"])
+            self.assertEqual(result.stdout.splitlines(), ["workflow", "run", "release-skills.yml", "--repo", "AliceRealm/alicerealm", "--ref", "main"])
 
     def test_prepare_and_unchanged_publish_need_no_origin_write(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -259,7 +259,7 @@ else:raise SystemExit('prepare attempted a write')
             subprocess.run(["git", "-C", str(root), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"], check=True)
             log = root / "aws-calls"
             env = dict(os.environ, PATH=str(bindir)+os.pathsep+os.environ['PATH'], GITHUB_ACTIONS="true",
-                       GITHUB_WORKFLOW_REF="GardenVilla/alicerealm/.github/workflows/release-skills.yml@refs/heads/main",
+                       GITHUB_WORKFLOW_REF="AliceRealm/alicerealm/.github/workflows/release-skills.yml@refs/heads/main",
                        R2_ACCESS_KEY_ID="test", R2_SECRET_ACCESS_KEY="test", R2_ENDPOINT="https://unused.invalid", R2_BUCKET="test",
                        ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY="public", ALICEREALM_SKILLS_SIGNING_KEY_FILE="outside-artifact", AWS_CALLS=str(log),
                        ORIGIN_MANIFEST=json.dumps({'sequence':8,'revision':'aaaaaaaaaaaaaaaa','tar_sha256':release.hashlib.sha256(b'archive').hexdigest(),'key_id':'trusted','managed_by':'alicerealm-cli','cli_version':'1.0.5','min_cli_version':'1.0.3','skills':[]}))
@@ -300,7 +300,7 @@ else:raise SystemExit('prepare attempted a write')
             build = root / "build/cli"
             build.mkdir(parents=True)
             (build / "prepared-source.json").write_text(json.dumps({"sha": "wrong", "cli_version": "1.0.5", "min_cli_version": "1.0.3"}))
-            env = dict(os.environ, GITHUB_ACTIONS="true", GITHUB_WORKFLOW_REF="GardenVilla/alicerealm/.github/workflows/release-skills.yml@refs/heads/main",
+            env = dict(os.environ, GITHUB_ACTIONS="true", GITHUB_WORKFLOW_REF="AliceRealm/alicerealm/.github/workflows/release-skills.yml@refs/heads/main",
                        R2_ACCESS_KEY_ID="test", R2_SECRET_ACCESS_KEY="test", ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY="public-only")
             env.pop("ALICEREALM_SKILLS_SIGNING_KEY_FILE", None)
             result = subprocess.run(["bash", str(scripts / "release-skills.sh"), "--publish"], env=env, capture_output=True, text=True)

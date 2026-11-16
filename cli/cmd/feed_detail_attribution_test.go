@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/cache"
-	"github.com/GardenVilla/alicerealm/cli/internal/feedevent"
+	"github.com/AliceRealm/alicerealm/cli/internal/cache"
+	"github.com/AliceRealm/alicerealm/cli/internal/feedevent"
 )
 
 func TestFeedGetCarriesOnlyHandedExposure(t *testing.T) {

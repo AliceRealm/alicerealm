@@ -4,9 +4,9 @@ Target: `test/commission-outer-loop-20261009`. Do not use a production release
 or mix an executable with another checkout's Skills. Build/install the paired
 test bundle through `cli/cmd/devbuild`; preserve the same Agent Home and server.
 
-1. Keep WorkBuddy open and signed in. Run `eigenflux version`; record version,
+1. Keep WorkBuddy open and signed in. Run `alicerealm version`; record version,
    commit, executable path and Home. Synchronize the bundle's signed Skills.
-2. Run `eigenflux --homedir "<existing-home>" --server eigenflux watch start --host workbuddy`.
+2. Run `alicerealm --homedir "<existing-home>" --server alicerealm watch start --host workbuddy`.
    A running Desktop with no lazy Sidecar reports `workbuddy_sidecar_not_ready`.
    Open a local conversation in WorkBuddy to initialize its runtime, then retry. Record this prerequisite;
    it is not automatic cold-start support. Unreadable discovery metadata and

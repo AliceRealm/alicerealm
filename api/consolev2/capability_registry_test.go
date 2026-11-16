@@ -58,7 +58,7 @@ func TestAgentCapabilityRegistryIsBilingualAndStable(t *testing.T) {
 		t.Fatalf("KYC browser handoff contract = %#v", authorize)
 	}
 	payment := byID["order.payment"]
-	if payment.CLI != "eigenflux order payment" || payment.MinCLIVersion != "0.0.103" || payment.RequiresConsoleHandoff || payment.Confirmation != "explicit_user_instruction" {
+	if payment.CLI != "alicerealm order payment" || payment.MinCLIVersion != "0.0.103" || payment.RequiresConsoleHandoff || payment.Confirmation != "explicit_user_instruction" {
 		t.Fatalf("order.payment contract = %#v", payment)
 	}
 	if commission.Localized["zh-CN"].Label != "创建任务委托草稿" || commission.Localized["en"].Label != "Create a Commission draft" {
@@ -237,7 +237,7 @@ func TestAgentAttentionDismissRequiresRevisionButConsoleRemainsCompatible(t *tes
 func TestNeedInputCapabilityUsesLinkedIntentAuthority(t *testing.T) {
 	for _, operation := range buildAgentCapabilityRegistry("en", true, true)["operations"].([]capabilityOperation) {
 		if operation.OperationID == "need.input.create" {
-			if operation.Confirmation != "linked_confirmed_intent" || operation.MinCLIVersion != "0.0.54" || operation.CLI != "eigenflux need input create" {
+			if operation.Confirmation != "linked_confirmed_intent" || operation.MinCLIVersion != "0.0.54" || operation.CLI != "alicerealm need input create" {
 				t.Fatalf("incorrect input capability: %#v", operation)
 			}
 			return

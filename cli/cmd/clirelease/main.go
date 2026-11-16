@@ -2,7 +2,7 @@
 package main
 
 import (
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"crypto/x509"

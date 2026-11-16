@@ -1,7 +1,7 @@
 package dispatch
 
 import (
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
 	"context"
 	"encoding/json"
 	"errors"

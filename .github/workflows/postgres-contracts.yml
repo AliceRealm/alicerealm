@@ -13,7 +13,7 @@ on:
       - 'api/middleware/**'
       - 'pkg/reqinfo/**'
       - 'pkg/runtimeidentity/**'
-      - 'api/handler_gen/alicerealm/api/**'
+      - 'api/handler_gen/eigenflux/api/**'
       - 'api/install/**'
       - 'contracts/**'
       - 'migrations/**'
@@ -58,7 +58,7 @@ on:
       - 'api/middleware/**'
       - 'pkg/reqinfo/**'
       - 'pkg/runtimeidentity/**'
-      - 'api/handler_gen/alicerealm/api/**'
+      - 'api/handler_gen/eigenflux/api/**'
       - 'api/install/**'
       - 'contracts/**'
       - 'migrations/**'
@@ -161,7 +161,7 @@ jobs:
           psql "$PG_DSN" -c 'CREATE DATABASE pgc_publish_ci;'
           PUBLISH_PG_TEST_DSN='postgres://postgres:postgres@127.0.0.1:5432/pgc_publish_ci?sslmode=disable' \
             go test -race -count=1 ./rpc/item -run '^TestPostgresPublish'
-          go test -race -count=1 ./api/handler_gen/alicerealm/api -run '^TestPublishTransfersDispatchOwnershipToRPC$'
+          go test -race -count=1 ./api/handler_gen/eigenflux/api -run '^TestPublishTransfersDispatchOwnershipToRPC$'
           PUBLISH_REDIS_TEST_ADDR='127.0.0.1:6379' \
             go test -race -count=1 ./pkg/mq ./pipeline/consumer ./pipeline/llm
       - name: Verify summary ownership and translation source fencing
@@ -199,7 +199,7 @@ jobs:
           AUTH_RETRY_REDIS_ADDR: 127.0.0.1:6379
         run: go test -race -p 1 -count=1 ./rpc/auth ./api/consolev2 -run '^TestAuthRetryV[12]OTPBoundaries$'
       - name: Verify broadcast detail ownership and reader permissions
-        run: go test -count=1 ./api/handler_gen/alicerealm/api -run 'Test(PostgresBroadcastDetail.*|GetItemAggregateStats|BroadcastCountryCode)'
+        run: go test -count=1 ./api/handler_gen/eigenflux/api -run 'Test(PostgresBroadcastDetail.*|GetItemAggregateStats|BroadcastCountryCode)'
       - name: Verify Attention schema and golden corpus
         run: go test -count=1 ./api/consolev2 -run '^(TestAttentionGoldenCorpusMatchesServerValidators|TestAttentionSchemaEnumsMatchServer)$'
       - name: Verify Console homepage and market HTTP and data contracts

@@ -3,11 +3,11 @@ package cmd
 import (
 	"archive/zip"
 	"bytes"
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
-	"github.com/GardenVilla/alicerealm/cli/internal/skills"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
+	"github.com/AliceRealm/alicerealm/cli/internal/skills"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
@@ -42,7 +42,7 @@ func TestHeartbeatAutomaticUpgradeEndToEnd(t *testing.T) {
 	}
 	buildDir := t.TempDir()
 	for _, v := range []string{"0.0.47", "0.0.48"} {
-		cmd := exec.Command("go", "build", "-ldflags", "-X main.Version="+v+" -X github.com/GardenVilla/alicerealm/cli/internal/skills.VerifyPublicKeyBase64="+base64.StdEncoding.EncodeToString(pub), "-o", filepath.Join(buildDir, v), ".")
+		cmd := exec.Command("go", "build", "-ldflags", "-X main.Version="+v+" -X github.com/AliceRealm/alicerealm/cli/internal/skills.VerifyPublicKeyBase64="+base64.StdEncoding.EncodeToString(pub), "-o", filepath.Join(buildDir, v), ".")
 		cmd.Dir = ".."
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("build CLI: %s %v", out, err)

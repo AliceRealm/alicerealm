@@ -26,9 +26,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
-	"github.com/GardenVilla/alicerealm/cli/internal/skills"
-	"github.com/GardenVilla/alicerealm/cli/internal/uninstallscript"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
+	"github.com/AliceRealm/alicerealm/cli/internal/skills"
+	"github.com/AliceRealm/alicerealm/cli/internal/uninstallscript"
 )
 
 //go:embed run-test.ps1.txt
@@ -118,7 +118,7 @@ func run() error {
 		ext = ".exe"
 	}
 	binary := filepath.Join(*out, "alicerealm"+ext)
-	ldflags := "-X main.Version=" + version + " -X main.Commit=" + commit + " -X github.com/GardenVilla/alicerealm/cli/internal/skills.VerifyPublicKeyBase64=" + *keyText
+	ldflags := "-X main.Version=" + version + " -X main.Commit=" + commit + " -X github.com/AliceRealm/alicerealm/cli/internal/skills.VerifyPublicKeyBase64=" + *keyText
 	if err := build(root, *target, binary, ".", ldflags); err != nil {
 		return err
 	}

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
 )
 
 // Uses the installed Codex model once; all AliceRealm APIs and identities are

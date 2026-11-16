@@ -95,7 +95,7 @@ func TestUGCSlopPromptPreservesPGCContract(t *testing.T) {
 	// extraction template, rather than adopting its older full-template snapshot.
 	start := strings.Index(rendered, "AI SLOP CLASSIFICATION")
 	require.GreaterOrEqual(t, len(rendered)-start, 10018)
-	require.Equal(t, "66ff813d57105fd17b38e365ca705f33a900d479392fb5fe22b84757f8a2e11b", SlopHash(rendered[start:start+10018]))
+	require.Equal(t, "2926170c1922e2a48c2ca3a9f2801e8c493be11a464703d56808e22678076949", SlopHash(rendered[start:start+10018]))
 }
 
 func TestProcessUGCItemPersistsRawQualityAndIdentity(t *testing.T) {

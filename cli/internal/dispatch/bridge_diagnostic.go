@@ -4,7 +4,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/mainbridge"
+	"github.com/AliceRealm/alicerealm/cli/internal/mainbridge"
 )
 
 type bridgeDiagnosticError struct {

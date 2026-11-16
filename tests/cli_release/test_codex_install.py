@@ -44,7 +44,7 @@ case "$*" in
   '--version') echo "codex-cli ${TEST_CODEX_VERSION:-0.142.0}" ;;
   'plugin list --json')
     if [ -f "$TEST_PLUGIN" ]; then echo '[{"id":"codex-alicerealm@alicerealm"}]'; else echo '[]'; fi ;;
-  'plugin marketplace add GardenVilla/codex-alicerealm')
+  'plugin marketplace add AliceRealm/codex-alicerealm')
     if [ "${TEST_FAILURE:-}" = source ]; then echo 'already added from a different source' >&2; exit 1; fi ;;
   'plugin add codex-alicerealm@alicerealm')
     case "${TEST_FAILURE:-}" in

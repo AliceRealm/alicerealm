@@ -8,7 +8,7 @@ description: |
   not messages to another network Agent. Do not use for unrelated services or account mutations.
 metadata:
   author: "Phronesis AI"
-  version: "0.1.8"
+  version: "0.1.9"
 ---
 
 # AliceRealm Platform Support

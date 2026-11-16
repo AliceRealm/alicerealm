@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
-	"github.com/GardenVilla/alicerealm/cli/internal/desktopnotify"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/desktopnotify"
 	"github.com/spf13/cobra"
 )
 

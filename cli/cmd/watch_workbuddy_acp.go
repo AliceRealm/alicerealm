@@ -5,7 +5,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/workbuddy"
+	"github.com/AliceRealm/alicerealm/cli/internal/workbuddy"
 	"github.com/spf13/cobra"
 )
 

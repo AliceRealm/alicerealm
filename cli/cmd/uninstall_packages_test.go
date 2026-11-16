@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
 )
 
 // The old stable entry deliberately has no finalizer. The official wrapper
@@ -57,7 +57,7 @@ func testUninstallVersionedPackage(t *testing.T, scenario string) {
 		name += ".exe"
 	}
 	built := filepath.Join(buildDir, name)
-	build := exec.Command("go", "build", "-ldflags", "-X main.Version=9.8.7 -X github.com/GardenVilla/alicerealm/cli/internal/skills.VerifyPublicKeyBase64="+base64.StdEncoding.EncodeToString(public), "-o", built, ".")
+	build := exec.Command("go", "build", "-ldflags", "-X main.Version=9.8.7 -X github.com/AliceRealm/alicerealm/cli/internal/skills.VerifyPublicKeyBase64="+base64.StdEncoding.EncodeToString(public), "-o", built, ".")
 	build.Dir = ".."
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build candidate: %v %s", err, out)

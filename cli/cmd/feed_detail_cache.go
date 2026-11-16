@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/cache"
+	"github.com/AliceRealm/alicerealm/cli/internal/cache"
 )
 
 func feedDetailFilename(itemID string) string {

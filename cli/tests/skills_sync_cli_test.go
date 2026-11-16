@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/skills"
+	"github.com/AliceRealm/alicerealm/cli/internal/skills"
 )
 
 // Exercise the actual CLI boundary, including quiet exit status and structured
@@ -32,7 +32,7 @@ func TestSkillsSyncCLIReadOnly(t *testing.T) {
 	}
 	root := t.TempDir()
 	binary := filepath.Join(root, "build", "alicerealm")
-	build := exec.Command("go", "build", "-ldflags", "-X main.Version=1.0.0 -X github.com/GardenVilla/alicerealm/cli/internal/skills.VerifyPublicKeyBase64="+base64.StdEncoding.EncodeToString(publicKey), "-o", binary, ".")
+	build := exec.Command("go", "build", "-ldflags", "-X main.Version=1.0.0 -X github.com/AliceRealm/alicerealm/cli/internal/skills.VerifyPublicKeyBase64="+base64.StdEncoding.EncodeToString(publicKey), "-o", binary, ".")
 	build.Dir = ".."
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build CLI: %v\n%s", err, output)

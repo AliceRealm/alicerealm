@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/cache"
-	"github.com/GardenVilla/alicerealm/cli/internal/controlcontext"
-	"github.com/GardenVilla/alicerealm/cli/internal/feedevent"
-	"github.com/GardenVilla/alicerealm/cli/internal/output"
+	"github.com/AliceRealm/alicerealm/cli/internal/cache"
+	"github.com/AliceRealm/alicerealm/cli/internal/controlcontext"
+	"github.com/AliceRealm/alicerealm/cli/internal/feedevent"
+	"github.com/AliceRealm/alicerealm/cli/internal/output"
 )
 
 func TestFeedV2CompletedBaselinePreservesAppliedContext(t *testing.T) {

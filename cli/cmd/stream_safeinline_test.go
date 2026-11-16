@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/output"
+	"github.com/AliceRealm/alicerealm/cli/internal/output"
 )
 
 // safeInline is the deterministic half of the anti-forgery defense: whatever a

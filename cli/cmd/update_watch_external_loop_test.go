@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
-	watchstate "github.com/GardenVilla/alicerealm/cli/internal/watch"
-	"github.com/GardenVilla/alicerealm/cli/internal/watchservice"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
+	watchstate "github.com/AliceRealm/alicerealm/cli/internal/watch"
+	"github.com/AliceRealm/alicerealm/cli/internal/watchservice"
 	"github.com/spf13/cobra"
 )
 

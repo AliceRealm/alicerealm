@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
 )
 
 func TestMainNoticeOverflowPreservesBusinessDesktopAndACK(t *testing.T) {

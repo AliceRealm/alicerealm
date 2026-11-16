@@ -11,11 +11,11 @@ import (
 	"slices"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
-	watchstate "github.com/GardenVilla/alicerealm/cli/internal/watch"
-	"github.com/GardenVilla/alicerealm/cli/internal/watchservice"
-	"github.com/GardenVilla/alicerealm/cli/internal/workbuddy"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
+	watchstate "github.com/AliceRealm/alicerealm/cli/internal/watch"
+	"github.com/AliceRealm/alicerealm/cli/internal/watchservice"
+	"github.com/AliceRealm/alicerealm/cli/internal/workbuddy"
 	"github.com/spf13/cobra"
 )
 

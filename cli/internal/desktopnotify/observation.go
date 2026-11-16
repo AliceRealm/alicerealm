@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
 )
 
 // Observation records submission, never banner visibility or human attention.

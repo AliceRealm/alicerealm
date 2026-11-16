@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/cache"
+	"github.com/AliceRealm/alicerealm/cli/internal/cache"
 )
 
 const feedInstructionReference = `In Feed items, recommended_actions[].instruction_ref names an intent above; its instruction is that intent's "then".`

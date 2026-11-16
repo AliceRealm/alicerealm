@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/desktopnotify"
+	"github.com/AliceRealm/alicerealm/cli/internal/desktopnotify"
 )
 
 // The fixture is the approved document's revised columns, including role labels.

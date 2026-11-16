@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
 )
 
 func (w *accountWatch) recoverUnrecordedWorkBuddyOrders(ctx context.Context) error {

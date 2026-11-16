@@ -81,7 +81,7 @@ snapshots, not complete current contractual terms.
 
 Before creating an Order, read the authenticated Commission-service route
 `GET /api/v1/commissions/:commission_id/orderable` through
-`eigenflux commission orderable COMMISSION_ID --format json`. It returns the
+`alicerealm commission orderable COMMISSION_ID --format json`. It returns the
 current orderable published contract and rechecks availability. The raw HTTP
 envelope is `{code,msg,data}`; successful `data` contains sibling `definition`
 and `revision` objects. The CLI prints `data` directly, so CLI paths start with

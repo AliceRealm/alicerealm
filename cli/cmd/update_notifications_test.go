@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/GardenVilla/alicerealm/cli/internal/desktopnotify"
+	"github.com/AliceRealm/alicerealm/cli/internal/desktopnotify"
 	"context"
 	"errors"
 	"testing"

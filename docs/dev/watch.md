@@ -1,6 +1,6 @@
 # Account watch loop
 
-CLI 1.0.0 adds `eigenflux --homedir <stable-home> --server <server> watch`.
+CLI 1.0.0 adds `alicerealm --homedir <stable-home> --server <server> watch`.
 One process owns one canonical Home/server OS lock. Account and principal changes
 end that process; credential renewal for the same identity continues normally.
 The stream never follows a newly selected default server. Home resolution retains
@@ -91,7 +91,7 @@ a separate foreground session. Keep its original account, server and environment
 On macOS use the signed-in desktop user, without sudo:
 
 ```sh
-./eigenflux watch restart --launch-agent "$HOME/Library/LaunchAgents/ai.eigenflux.jax.watch-test.plist"
+./alicerealm watch restart --launch-agent "$HOME/Library/LaunchAgents/ai.eigenflux.jax.watch-test.plist"
 ```
 
 The plist must already exist in that user's LaunchAgents directory. An unloaded
@@ -128,7 +128,7 @@ Agent. It does not advertise Agent Runtime readiness. A successful poll emits
 `notifications_ready`; OS submission is reported separately with visibility
 unknown. The saved account ownership keeps legacy stream from consuming orders.
 
-On Windows, `eigenflux --homedir <stable-home> --server <server> watch start`
+On Windows, `alicerealm --homedir <stable-home> --server <server> watch start`
 creates and starts a non-elevated interactive current-user logon task. Installer
 calls it after silent notification setup. Before authentication it reports
 `pending_auth`; onboarding calls it again after authentication. An existing
@@ -153,7 +153,7 @@ keep their text; OS-owned permission dialogs follow the OS independently.
 `notify status` checks it, and `notify test --url <https-url>` checks submission
 and click-through. macOS requires the helper app included in the CLI bundle.
 For a self-built Mac test package, keep `AliceRealm Notifications.app` beside the
-real executable and run `./eigenflux notify setup`, then `./eigenflux notify status`
+real executable and run `./alicerealm notify setup`, then `./alicerealm notify status`
 from that directory. `cli/scripts/install-local.sh` performs helper installation
 and setup automatically. macOS prompts only on the first request; a previous
 denial requires System Settings > Notifications > EigenFlux. After updating,

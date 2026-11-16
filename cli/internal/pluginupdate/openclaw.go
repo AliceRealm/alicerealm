@@ -22,8 +22,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
-	watchstate "github.com/GardenVilla/alicerealm/cli/internal/watch"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
+	watchstate "github.com/AliceRealm/alicerealm/cli/internal/watch"
 )
 
 const PluginID = "openclaw-alicerealm"

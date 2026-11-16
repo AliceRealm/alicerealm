@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/commissionapi"
+	"github.com/AliceRealm/alicerealm/cli/internal/commissionapi"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )

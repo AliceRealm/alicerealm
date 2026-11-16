@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/client"
+	"github.com/AliceRealm/alicerealm/cli/internal/client"
 )
 
 func TestFormatMessageSendErrorPreservesStructuredDetails(t *testing.T) {

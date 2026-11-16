@@ -20,7 +20,7 @@ func TestWatchRestartCapabilityStaysLocal(t *testing.T) {
 		if seed.id != "watch.restart" {
 			continue
 		}
-		if seed.cli != "eigenflux watch restart" || seed.minCLI != "1.0.3" ||
+		if seed.cli != "alicerealm watch restart" || seed.minCLI != "1.0.3" ||
 			seed.category != "local" || seed.availability != "always" ||
 			seed.confirmation != "explicit_user_instruction" || seed.requiresConsoleHandoff {
 			t.Fatalf("incorrect restart capability: %+v", seed)

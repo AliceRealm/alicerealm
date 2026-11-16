@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
 )
 
 func TestV2CredentialsLockReleasesAfterWindowsReaderCloses(t *testing.T) {

@@ -6,9 +6,9 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
-	"github.com/GardenVilla/alicerealm/cli/internal/heartbeatmigration"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/heartbeatmigration"
 )
 
 func nativeHeartbeatLauncher(home, server, mode, shellName string) (string, error) {

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
 )
 
 func verifyPublished(cdn, minimum string, key ed25519.PublicKey) error {

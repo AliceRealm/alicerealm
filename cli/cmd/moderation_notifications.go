@@ -13,8 +13,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/desktopnotify"
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/desktopnotify"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
 	"github.com/spf13/cobra"
 )
 

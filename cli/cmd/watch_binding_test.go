@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
-	watchstate "github.com/GardenVilla/alicerealm/cli/internal/watch"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
+	watchstate "github.com/AliceRealm/alicerealm/cli/internal/watch"
 	"github.com/spf13/cobra"
 )
 

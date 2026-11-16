@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
-	"github.com/GardenVilla/alicerealm/cli/internal/client"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/client"
 )
 
 // refreshPinnedV2Credentials preserves the watch account through lock waits and

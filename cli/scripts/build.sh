@@ -74,7 +74,7 @@ compile_platform() {
     bin_name="${bin_name}.exe"
   fi
   GOOS="$os" GOARCH="$arch" "${GO_CMD[@]}" build \
-    -ldflags "-X main.Version=${CLI_VERSION} -X main.Commit=${CLI_COMMIT} -X github.com/GardenVilla/alicerealm/cli/internal/skills.VerifyPublicKeyBase64=${ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY}" \
+    -ldflags "-X main.Version=${CLI_VERSION} -X main.Commit=${CLI_COMMIT} -X github.com/AliceRealm/alicerealm/cli/internal/skills.VerifyPublicKeyBase64=${ALICEREALM_SKILLS_VERIFY_PUBLIC_KEY}" \
     -o "$BUILD_DIR/$bin_name" . > "$BUILD_DIR/$bin_name.build.log" 2>&1
 }
 

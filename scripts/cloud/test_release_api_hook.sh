@@ -13,7 +13,7 @@ for outcome in healthy failed; do
 exit 0
 SCRIPT
   cat > "$test_dir/source/deploy/release-events.json" <<'JSON'
-[{"id":"check-start","kind":"instrumentation","deploy_scope":"api","dashboards":["card-refresh"],"title":"Check starts","description":"Partial client coverage","pr":"https://github.com/GardenVilla/alicerealm/pull/1"}]
+[{"id":"check-start","kind":"instrumentation","deploy_scope":"api","dashboards":["card-refresh"],"title":"Check starts","description":"Partial client coverage","pr":"https://github.com/AliceRealm/alicerealm/pull/1"}]
 JSON
   go() { mkdir -p "$(dirname "$3")"; printf '#!/bin/sh\n' > "$3"; chmod +x "$3"; }
   systemctl() { return 0; }

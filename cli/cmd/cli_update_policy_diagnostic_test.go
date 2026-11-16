@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
 )
 
 func TestPolicyDiagnosticsPersistAcrossMaintenanceEntries(t *testing.T) {

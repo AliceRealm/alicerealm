@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
 )
 
 // Meta holds client environment metadata sent as HTTP headers on every request.

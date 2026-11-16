@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/filelock"
+	"github.com/AliceRealm/alicerealm/cli/internal/filelock"
 )
 
 // ErrSyncInProgress identifies a verified active writer, rather than a missing

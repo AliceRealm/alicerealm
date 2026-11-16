@@ -1,7 +1,7 @@
 package feedevent
 
 import (
-	"github.com/GardenVilla/alicerealm/cli/internal/filelock"
+	"github.com/AliceRealm/alicerealm/cli/internal/filelock"
 	"os"
 	"path/filepath"
 	"time"

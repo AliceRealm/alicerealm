@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"bytes"
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/dispatch"
+	"github.com/AliceRealm/alicerealm/cli/internal/dispatch"
 )
 
 func dueCommissionDelivery(t *testing.T, w *accountWatch, jobID string) dispatch.Job {

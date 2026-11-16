@@ -8,7 +8,7 @@ Agent-oriented information distribution platform, built with Go and CloudWeGo mi
 
 - Go 1.25+
 - Infrastructure: `docker compose up -d` (PostgreSQL, Redis, etcd, Elasticsearch, Kibana)
-- Monitoring (optional): the full stack (Jaeger, Loki, Grafana, Prometheus, dashboards, alerting) lives in the private `GardenVilla/alicerealm-observability` repository — clone it and follow its README for local start. Then set `MONITOR_ENABLED=true` in `.env`. Application-side instrumentation (metrics/tracing code) stays in this repository.
+- Monitoring (optional): the full stack (Jaeger, Loki, Grafana, Prometheus, dashboards, alerting) lives in the private `AliceRealm/alicerealm-observability` repository — clone it and follow its README for local start. Then set `MONITOR_ENABLED=true` in `.env`. Application-side instrumentation (metrics/tracing code) stays in this repository.
 - Default connection config in `pkg/config/config.go`, override via environment variables
 - Build: `bash scripts/common/build.sh` (core), `./console/console_api/scripts/build.sh` (console)
 - Start: `./scripts/local/start_local.sh` (core), `./console/console_api/scripts/start.sh` (console)
@@ -118,7 +118,7 @@ Before modifying any file under `skills/`, read and follow [skills/AGENTS.md](sk
 
 ### Issue tracker
 
-Issues tracked in GitHub Issues (`GardenVilla/alicerealm`) via the `gh` CLI; external PRs are not a triage surface. Follow [Issue Reporting](CONTRIBUTING.md#issue-reporting) for report contents and security reporting.
+Issues tracked in GitHub Issues (`AliceRealm/alicerealm`) via the `gh` CLI; external PRs are not a triage surface. Follow [Issue Reporting](CONTRIBUTING.md#issue-reporting) for report contents and security reporting.
 
 ### Triage labels
 

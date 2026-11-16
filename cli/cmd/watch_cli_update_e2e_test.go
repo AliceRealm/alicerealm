@@ -22,10 +22,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GardenVilla/alicerealm/cli/internal/auth"
-	"github.com/GardenVilla/alicerealm/cli/internal/config"
-	"github.com/GardenVilla/alicerealm/cli/internal/maintenance"
-	"github.com/GardenVilla/alicerealm/cli/internal/selfupdate"
+	"github.com/AliceRealm/alicerealm/cli/internal/auth"
+	"github.com/AliceRealm/alicerealm/cli/internal/config"
+	"github.com/AliceRealm/alicerealm/cli/internal/maintenance"
+	"github.com/AliceRealm/alicerealm/cli/internal/selfupdate"
 	"github.com/gorilla/websocket"
 )
 
@@ -36,7 +36,7 @@ func TestWatchAutomaticallyUpdatesWithoutHeartbeatOrAgent(t *testing.T) {
 	pub, key, _ := ed25519.GenerateKey(rand.Reader)
 	directory := t.TempDir()
 	for _, v := range []string{"0.0.47", "0.0.48"} {
-		build := exec.Command("go", "build", "-ldflags", "-X main.Version="+v+" -X github.com/GardenVilla/alicerealm/cli/internal/skills.VerifyPublicKeyBase64="+base64.StdEncoding.EncodeToString(pub), "-o", filepath.Join(directory, v), ".")
+		build := exec.Command("go", "build", "-ldflags", "-X main.Version="+v+" -X github.com/AliceRealm/alicerealm/cli/internal/skills.VerifyPublicKeyBase64="+base64.StdEncoding.EncodeToString(pub), "-o", filepath.Join(directory, v), ".")
 		build.Dir = ".."
 		if output, err := build.CombinedOutput(); err != nil {
 			t.Fatalf("build CLI: %v %s", err, output)
