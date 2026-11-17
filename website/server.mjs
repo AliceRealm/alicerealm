@@ -9,6 +9,7 @@ const port = Number.parseInt(process.env.WEBSITE_PORT || '4173', 10);
 const host = process.env.WEBSITE_HOST || '127.0.0.1';
 const apiOrigin = new URL(process.env.ALICEREALM_API_ORIGIN || 'http://127.0.0.1:8080');
 const installDocument = join(repoRoot, 'skills', 'install.md');
+const releaseRoot = process.env.ALICEREALM_RELEASE_ROOT || join(repoRoot, 'build', 'updates');
 
 const contentTypes = new Map([
   ['.html', 'text/html; charset=utf-8'],
@@ -17,6 +18,7 @@ const contentTypes = new Map([
   ['.svg', 'image/svg+xml'],
   ['.json', 'application/json; charset=utf-8'],
   ['.md', 'text/markdown; charset=utf-8'],
+  ['.txt', 'text/plain; charset=utf-8'],
 ]);
 
 const proxiedFiles = new Set(['/bootstrap.md', '/install.ps1', '/install.sh', '/uninstall.ps1', '/uninstall.sh']);
@@ -70,6 +72,14 @@ function resolveAsset(pathname) {
   return candidate;
 }
 
+function resolveReleaseAsset(pathname) {
+  if (!pathname.startsWith('/cli/') && !pathname.startsWith('/skills/') && !pathname.startsWith('/installers/')) return null;
+  const safePath = normalize(pathname.replace(/^\/+/, '')).replace(/^(\.\.(\/|\\|$))+/, '');
+  const candidate = join(releaseRoot, safePath);
+  if (!candidate.startsWith(releaseRoot) || !existsSync(candidate) || !statSync(candidate).isFile()) return null;
+  return candidate;
+}
+
 const server = http.createServer((request, response) => {
   setSecurityHeaders(response);
   const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
@@ -91,6 +101,18 @@ const server = http.createServer((request, response) => {
     });
     if (request.method === 'HEAD') response.end();
     else createReadStream(installDocument).pipe(response);
+    return;
+  }
+
+  const releaseAsset = resolveReleaseAsset(url.pathname);
+  if (releaseAsset) {
+    const immutable = /^\/cli\/\d+\.\d+\.\d+\//.test(url.pathname);
+    response.writeHead(200, {
+      'Content-Type': contentTypes.get(extname(releaseAsset).toLowerCase()) || 'application/octet-stream',
+      'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : 'no-store',
+    });
+    if (request.method === 'HEAD') response.end();
+    else createReadStream(releaseAsset).pipe(response);
     return;
   }
 

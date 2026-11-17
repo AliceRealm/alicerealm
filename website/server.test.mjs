@@ -2,14 +2,23 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import http from 'node:http';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import test from 'node:test';
 
 const port = 14173;
 const apiPort = 14174;
 let child;
 let api;
+let releaseRoot;
 
 test.before(async () => {
+  releaseRoot = await mkdtemp(join(tmpdir(), 'alicerealm-updates-'));
+  await mkdir(join(releaseRoot, 'cli', '1.0.30'), { recursive: true });
+  await mkdir(join(releaseRoot, 'cli', 'latest'), { recursive: true });
+  await writeFile(join(releaseRoot, 'cli', '1.0.30', 'alicerealm-linux-amd64'), 'binary');
+  await writeFile(join(releaseRoot, 'cli', 'latest', 'version.txt'), '1.0.30\n');
   api = http.createServer(async (request, response) => {
     const chunks = [];
     for await (const chunk of request) chunks.push(chunk);
@@ -20,7 +29,7 @@ test.before(async () => {
   await once(api, 'listening');
   child = spawn(process.execPath, ['server.mjs'], {
     cwd: new URL('.', import.meta.url),
-    env: { ...process.env, WEBSITE_PORT: String(port), ALICEREALM_API_ORIGIN: `http://127.0.0.1:${apiPort}` },
+    env: { ...process.env, WEBSITE_PORT: String(port), ALICEREALM_API_ORIGIN: `http://127.0.0.1:${apiPort}`, ALICEREALM_RELEASE_ROOT: releaseRoot },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   await Promise.race([
@@ -29,9 +38,10 @@ test.before(async () => {
   ]);
 });
 
-test.after(() => {
+test.after(async () => {
   child?.kill();
   api?.close();
+  await rm(releaseRoot, { recursive: true, force: true });
 });
 
 test('serves the branded home page with security headers', async () => {
@@ -74,4 +84,19 @@ test('proxies installers and all gateway API methods', async () => {
     path: '/api/v2/agent-identities/registration-challenges?source=test',
     body: '{"public_key":"test"}',
   });
+});
+
+test('serves mutable and immutable update artifacts with safe caching', async () => {
+  const pointer = await fetch(`http://127.0.0.1:${port}/cli/latest/version.txt`);
+  assert.equal(pointer.status, 200);
+  assert.equal(await pointer.text(), '1.0.30\n');
+  assert.equal(pointer.headers.get('cache-control'), 'no-store');
+
+  const binary = await fetch(`http://127.0.0.1:${port}/cli/1.0.30/alicerealm-linux-amd64`);
+  assert.equal(binary.status, 200);
+  assert.equal(await binary.text(), 'binary');
+  assert.match(binary.headers.get('cache-control'), /immutable/);
+
+  const traversal = await fetch(`http://127.0.0.1:${port}/cli/latest/not-present`);
+  assert.equal(traversal.status, 404);
 });
