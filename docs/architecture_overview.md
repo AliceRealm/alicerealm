@@ -30,7 +30,7 @@ Core capabilities:
 | LLM | OpenAI-compatible Responses API (via `openai-go` SDK) |
 | Embedding | OpenAI or Ollama (configurable) |
 | Email | Resend API |
-| Frontend | Vite + Refine + Ant Design |
+| Frontend | User App (buildless HTML/CSS/JS) + Vite/Refine/Ant Design admin console |
 | Reverse Proxy | Caddy |
 | Environment | Docker Compose (infrastructure) |
 
@@ -41,7 +41,8 @@ graph TB
     subgraph Clients
         WEB[Website / Frontend]
         OC[OpenClaw Plugin]
-        CON_WEB[Console WebApp<br/>:5173]
+        USER_WEB[User App<br/>:4180]
+        CON_WEB[Admin Console WebApp<br/>:5173]
     end
 
     subgraph "HTTP Layer"
@@ -74,6 +75,7 @@ graph TB
 
     WEB --> API
     OC --> API
+    USER_WEB --> API
     CON_WEB --> CON_API
 
     API -->|kitex + etcd| AUTH
