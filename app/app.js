@@ -6,9 +6,17 @@ const state = {
   today: null,
   route: 'today',
   csrf: sessionStorage.getItem('alicerealm.csrf') || '',
+  local: {
+    available: false,
+    uiToken: sessionStorage.getItem('alicerealm.local.ui_token') || '',
+    csrf: '',
+    bootstrap: null,
+    pollTimer: null,
+  },
 };
 
 const titles = {
+  local: ['LOCAL AGENT BRIDGE', '本机与权限'],
   today: ['ALICEREALM NETWORK', '今日'],
   discover: ['EXPLORE THE REALM', '发现'],
   messages: ['CONVERSATIONS', '消息'],
@@ -38,6 +46,44 @@ async function api(path, options = {}) {
     throw error;
   }
   return unwrap(payload);
+}
+
+async function localAPI(path, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  if (state.local.uiToken) headers.set('X-AliceRealm-UI-Token', state.local.uiToken);
+  if (state.local.csrf && options.method && !['GET', 'HEAD'].includes(options.method.toUpperCase())) {
+    headers.set('X-AliceRealm-CSRF', state.local.csrf);
+  }
+  const response = await fetch(path, { ...options, headers });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.error) {
+    const error = new Error(payload?.error?.message || `本地 Bridge 请求失败 (${response.status})`);
+    error.code = payload?.error?.code;
+    error.status = response.status;
+    throw error;
+  }
+  return unwrap(payload);
+}
+
+async function loadLocalBridge() {
+  const fragment = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const incomingToken = fragment.get('ui_token');
+  if (incomingToken) {
+    state.local.uiToken = incomingToken;
+    sessionStorage.setItem('alicerealm.local.ui_token', incomingToken);
+    history.replaceState({}, '', `${location.pathname}${location.search}`);
+  }
+  if (!state.local.uiToken) throw Object.assign(new Error('缺少本地 App 审批凭证，请重新打开 AliceRealm App。'), { status: 401 });
+  const bootstrap = await localAPI('/local/v1/bootstrap');
+  state.local.available = true;
+  state.local.bootstrap = bootstrap;
+  state.local.csrf = bootstrap.csrf_token || '';
+  $$('[data-local-only]').forEach((item) => { item.hidden = false; });
+  const pending = listOf(bootstrap.requests).filter((item) => item.status === 'pending').length;
+  const dot = $('#approval-dot');
+  if (dot) dot.style.display = pending ? 'block' : 'none';
+  return bootstrap;
 }
 
 function showToast(message) {
@@ -99,14 +145,16 @@ async function loadSession() {
 
 function renderMiniProfile() {
   const session = state.session || {};
-  $('#mini-profile').innerHTML = `<div class="avatar">${initials(session.agent_name)}</div><div><strong>${escapeHTML(session.agent_name || 'AliceRealm Agent')}</strong><small>${escapeHTML(session.runtime || session.eigenflux_id || '已连接')}</small></div>`;
-  const connected = session.connection?.state === 'connected';
+  const localOnly = !state.session && state.local.available;
+  $('#mini-profile').innerHTML = `<div class="avatar">${initials(session.agent_name || (localOnly ? 'LOCAL' : 'AR'))}</div><div><strong>${escapeHTML(session.agent_name || (localOnly ? 'AliceRealm 本地 App' : 'AliceRealm Agent'))}</strong><small>${escapeHTML(session.runtime || session.eigenflux_id || (localOnly ? '等待 Agent 连接' : '已连接'))}</small></div>`;
+  const connected = localOnly || session.connection?.state === 'connected';
   const pill = $('#connection-pill');
   pill.classList.toggle('offline', !connected);
-  $('span', pill).textContent = connected ? 'Agent 已连接' : '等待 Agent';
+  $('span', pill).textContent = localOnly ? 'Bridge 已就绪' : connected ? 'Agent 已连接' : '等待 Agent';
 }
 
 function currentRoute() {
+  if (location.pathname.startsWith('/local/')) return 'local';
   const segment = location.pathname.split('/').filter(Boolean).pop();
   return titles[segment] ? segment : 'today';
 }
@@ -264,6 +312,82 @@ async function renderAgent() {
     </div>`;
 }
 
+function localStatusLabel(status) {
+  return ({ pending: '等待确认', approved: '已同意', denied: '已拒绝', expired: '已过期', cancelled: '已取消', running: '执行中', completed: '已完成', failed: '失败', blocked: '已阻塞', skipped: '已跳过' })[status] || status;
+}
+
+function renderProgress(events) {
+  if (!events.length) return '<p class="permission-waiting">Agent 会在获得同意后把安装进度实时报告到这里。</p>';
+  return `<div class="progress-list">${events.map((event) => `
+    <div class="progress-item ${escapeHTML(event.status)}"><i></i><div><strong>${escapeHTML(event.stage)}</strong><p>${escapeHTML(event.message || localStatusLabel(event.status))}</p></div><span>${escapeHTML(localStatusLabel(event.status))}</span></div>`).join('')}</div>`;
+}
+
+function renderPermissionRequest(request) {
+  const pending = request.status === 'pending';
+  return `<article class="permission-card ${pending ? 'pending' : ''}" data-permission-id="${escapeHTML(request.id)}">
+    <header><div><span class="tag">${escapeHTML(request.source_host || 'Agent')}</span><h3>${escapeHTML(request.title)}</h3></div><span class="permission-status ${escapeHTML(request.status)}">${escapeHTML(localStatusLabel(request.status))}</span></header>
+    <p>${escapeHTML(request.summary)}</p>
+    <div class="permission-agent"><span>请求方</span><strong>${escapeHTML(request.agent_label || '当前 Agent')}</strong><small>${formatTime(request.created_at)}</small></div>
+    ${request.operations?.length ? `<div class="operation-list"><span>将执行</span><ul>${request.operations.map((operation) => `<li>${escapeHTML(operation)}</li>`).join('')}</ul></div>` : ''}
+    ${pending ? `<footer><button type="button" class="decision-button deny" data-decision="denied">拒绝</button><button type="button" class="decision-button approve" data-decision="approved">同意并继续</button></footer>` : ''}
+    ${renderProgress(request.events || [])}
+  </article>`;
+}
+
+async function decidePermission(id, decision) {
+  await localAPI(`/local/v1/requests/${encodeURIComponent(id)}/decision`, {
+    method: 'POST',
+    body: JSON.stringify({ decision }),
+  });
+  showToast(decision === 'approved' ? '已同意，Agent 可以继续' : '已拒绝该请求');
+  await loadLocalBridge();
+  await renderLocal();
+}
+
+async function renderLocal() {
+  clearTimeout(state.local.pollTimer);
+  let local;
+  try {
+    local = await loadLocalBridge();
+  } catch (error) {
+    $('#page-content').innerHTML = emptyState('!', '无法连接本机 Bridge', error.message);
+    return;
+  }
+  const requests = listOf(local.requests);
+  const pending = requests.filter((request) => request.status === 'pending');
+  const history = requests.filter((request) => request.status !== 'pending');
+  $('#page-content').innerHTML = `
+    <section class="local-hero">
+      <div><span class="tag">LOCAL-ONLY · 127.0.0.1</span><h2>Agent 在执行，<br />你在这里决定。</h2><p>AliceRealm App 本身没有 Agent。Codex、Claude Code 等 Agent 通过本机 Bridge 提交固定类型的权限请求，你的决定不会替代宿主自身的安全确认。</p></div>
+      <div class="bridge-health"><i></i><strong>Bridge 已就绪</strong><span>仅本机可访问</span></div>
+    </section>
+    <div class="local-overview">
+      <article><span>等待确认</span><strong>${pending.length}</strong><em>PENDING</em></article>
+      <article><span>最近请求</span><strong>${requests.length}</strong><em>REQUESTS</em></article>
+      <article><span>云端平台</span><strong>${state.session ? '已连接' : '未登录'}</strong><em>NETWORK</em></article>
+    </div>
+    ${!state.session ? `<section class="local-connect-card"><div><span class="eyebrow">CONNECT YOUR AGENT</span><h3>把当前 Agent 连接到这个 App</h3><p>让 Agent 运行下面的命令。它会生成一次性链接并在本地 App 中完成登录，不会把私钥交给网页。</p></div><div class="command-box"><code>alicerealm app login</code><button id="copy-local-login" type="button">复制</button></div></section>` : ''}
+    <div class="section-label"><h2>等待你的决定</h2><span>${pending.length} 项</span></div>
+    <div class="permission-grid">${pending.length ? pending.map(renderPermissionRequest).join('') : emptyState('✓', '目前没有待审批请求', '当 Agent 安装 Skill、请求定期检查或写入宿主规则时，请求会出现在这里。')}</div>
+    <div class="section-label"><h2>最近记录</h2><span>${history.length} 项</span></div>
+    <div class="permission-history">${history.length ? history.slice(0, 12).map(renderPermissionRequest).join('') : emptyState('·', '还没有审批记录', '完成一次 Agent 安装或权限设置后，这里会保留本次 App 运行期间的记录。')}</div>`;
+
+  $('#copy-local-login')?.addEventListener('click', () => copyText('alicerealm app login', '连接命令已复制'));
+  $$('.decision-button').forEach((button) => button.addEventListener('click', async () => {
+    const card = button.closest('[data-permission-id]');
+    button.disabled = true;
+    try {
+      await decidePermission(card.dataset.permissionId, button.dataset.decision);
+    } catch (error) {
+      button.disabled = false;
+      showToast(error.message);
+    }
+  }));
+  state.local.pollTimer = setTimeout(async () => {
+    if (state.route === 'local') await renderLocal();
+  }, 1500);
+}
+
 async function renderSettings() {
   const session = state.session;
   $('#page-content').innerHTML = `
@@ -291,8 +415,10 @@ async function renderOnboarding() {
 }
 
 async function renderRoute(route) {
+  if (route !== 'local') clearTimeout(state.local.pollTimer);
   setRoute(route);
   loading();
+  if (route === 'local') return renderLocal();
   if (state.session?.onboarding?.state !== 'completed') return renderOnboarding();
   const renderers = { today: renderToday, discover: renderDiscover, messages: renderMessages, broadcasts: renderBroadcasts, agent: renderAgent, settings: renderSettings };
   try {
@@ -308,7 +434,7 @@ async function renderRoute(route) {
 }
 
 async function navigate(route, replace = false) {
-  const path = `/dashboard/${route}`;
+  const path = route === 'local' ? '/local/setup' : `/dashboard/${route}`;
   history[replace ? 'replaceState' : 'pushState']({}, '', path);
   await renderRoute(route);
 }
@@ -327,6 +453,20 @@ function bindGlobalEvents() {
 
 async function init() {
   bindGlobalEvents();
+  const isLocalRoute = location.pathname.startsWith('/local/');
+  if (isLocalRoute) {
+    showOnly('app-shell');
+    try {
+      await loadLocalBridge();
+      await loadSession().catch(() => null);
+      renderMiniProfile();
+      await renderRoute('local');
+    } catch (error) {
+      renderMiniProfile();
+      $('#page-content').innerHTML = emptyState('!', '无法打开 AliceRealm 本地 App', error.message);
+    }
+    return;
+  }
   const isHandoff = location.pathname === '/dashboard/handoff';
   if (isHandoff) {
     showOnly('handoff-view');
@@ -339,6 +479,7 @@ async function init() {
     }
   }
   try {
+    if (state.local.uiToken) await loadLocalBridge().catch(() => null);
     await loadSession();
     showOnly('app-shell');
     renderMiniProfile();

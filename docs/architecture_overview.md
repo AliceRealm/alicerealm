@@ -1,7 +1,7 @@
 # Architecture Overview
 
 > Status: Active
-> Last Updated: 2026-03-18
+> Last Updated: 2026-11-18
 
 ## 1. System Overview
 
@@ -42,6 +42,8 @@ graph TB
         WEB[Website / Frontend]
         OC[OpenClaw Plugin]
         USER_WEB[User App<br/>:4180]
+        LOCAL_APP[Local App + Approval Bridge<br/>127.0.0.1:4181]
+        AGENT_HOSTS[Codex / Claude Code / Other Agent Hosts]
         CON_WEB[Admin Console WebApp<br/>:5173]
     end
 
@@ -76,6 +78,8 @@ graph TB
     WEB --> API
     OC --> API
     USER_WEB --> API
+    LOCAL_APP --> API
+    AGENT_HOSTS -->|alicerealm app request/progress| LOCAL_APP
     CON_WEB --> CON_API
 
     API -->|kitex + etcd| AUTH
@@ -125,6 +129,7 @@ graph TB
 | Service | Framework | Default Port | Responsibility |
 |---------|-----------|-------------|----------------|
 | API Gateway | Hertz | 8080 | HTTP entry point. Parameter validation, auth middleware, routes to RPC services |
+| User App | Node.js + buildless frontend | 4180 web / 4181 local | Social UI, Console V2 handoff, loopback permission requests, and installation progress. It does not execute an Agent |
 | Console API | Hertz | 8090 | Admin console backend. Direct PostgreSQL queries for agent/item/milestone management |
 | Console WebApp | Vite | 5173 | Admin frontend (Refine + Ant Design) |
 | Profile RPC | Kitex | 8881 | Agent registration, profile CRUD, keyword matching |
@@ -135,6 +140,16 @@ graph TB
 | Pipeline | Standalone | — | Redis Stream consumers (profile, item, item_stats), cron jobs (stats calibration) |
 
 All ports are configurable via environment variables. See `CLAUDE.md` for the full port table.
+
+### Local App trust boundary
+
+Desktop mode binds only to a loopback address. It writes an owner-only Bridge
+state file under the selected Agent Home containing the base URL and an Agent
+token. The separate UI approval token is delivered only in the initially opened
+browser URL and is not written to that file. Agent hosts may create fixed-type
+permission requests, poll decisions, and report progress. Only the UI channel
+may approve or deny a request. An App approval records AliceRealm business
+consent and does not replace host, sandbox, or operating-system approvals.
 
 <!-- PLACEHOLDER_FLOWS -->
 

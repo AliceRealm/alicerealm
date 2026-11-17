@@ -1,12 +1,18 @@
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import http from 'node:http';
+import https from 'node:https';
+import { homedir } from 'node:os';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { LocalBridge } from './local-bridge.mjs';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const port = Number.parseInt(process.env.APP_PORT || '4180', 10);
 const host = process.env.APP_HOST || '127.0.0.1';
-const apiOrigin = new URL(process.env.ALICEREALM_API_ORIGIN || 'http://127.0.0.1:8080');
+const appMode = process.env.APP_MODE || 'web';
+const apiOrigin = new URL(process.env.ALICEREALM_API_ORIGIN || (appMode === 'desktop' ? 'https://alicerealm.com' : 'http://127.0.0.1:8080'));
+const appHome = process.env.ALICEREALM_HOME || join(homedir(), '.alicerealm');
+const bridge = appMode === 'desktop' ? new LocalBridge({ home: appHome, port, host, uiToken: process.env.ALICEREALM_UI_TOKEN || '' }) : null;
 
 const contentTypes = new Map([
   ['.html', 'text/html; charset=utf-8'],
@@ -27,9 +33,15 @@ function proxyAPI(request, response, url) {
   const headers = { ...request.headers };
   delete headers.connection;
   delete headers['proxy-connection'];
-  const upstream = http.request({
+  if (appMode === 'desktop') {
+    headers.host = apiOrigin.host;
+    if (headers.origin) headers.origin = 'https://app.alicerealm.com';
+  }
+  const client = apiOrigin.protocol === 'https:' ? https : http;
+  const upstream = client.request({
+    protocol: apiOrigin.protocol,
     hostname: apiOrigin.hostname,
-    port: apiOrigin.port || 80,
+    port: apiOrigin.port || (apiOrigin.protocol === 'https:' ? 443 : 80),
     path: `${url.pathname}${url.search}`,
     method: request.method,
     headers,
@@ -52,16 +64,26 @@ function proxyAPI(request, response, url) {
 
 function resolveAsset(pathname) {
   const requested = pathname.replace(/^\/+/, '');
-  if (!requested || pathname.startsWith('/dashboard')) return join(root, 'index.html');
+  if (!requested || pathname.startsWith('/dashboard') || pathname.startsWith('/local/')) return join(root, 'index.html');
   const safePath = normalize(requested).replace(/^(\.\.(\/|\\|$))+/, '');
   const candidate = join(root, safePath);
   if (!candidate.startsWith(root) || !existsSync(candidate) || !statSync(candidate).isFile()) return null;
   return candidate;
 }
 
-export const server = http.createServer((request, response) => {
+export const server = http.createServer(async (request, response) => {
   securityHeaders(response);
   const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
+  if (bridge && (url.pathname.startsWith('/local/v1/') || url.pathname.startsWith('/bridge/v1/'))) {
+    try {
+      const handled = await bridge.handle(request, response, url);
+      if (handled !== false) return;
+    } catch (error) {
+      if (response.headersSent) return response.end();
+      response.writeHead(error.status || 500, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, no-store' });
+      return response.end(JSON.stringify({ error: { code: 'LOCAL_BRIDGE_ERROR', message: error.message } }));
+    }
+  }
   if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return proxyAPI(request, response, url);
   if (!['GET', 'HEAD'].includes(request.method || 'GET')) {
     response.writeHead(405, { Allow: 'GET, HEAD' });
@@ -81,8 +103,17 @@ export const server = http.createServer((request, response) => {
   else createReadStream(asset).pipe(response);
 });
 
-server.listen(port, host, () => console.log(`AliceRealm user app listening on http://${host}:${port}`));
+server.listen(port, host, () => {
+  bridge?.writeState();
+  console.log(`AliceRealm user app listening on http://${host}:${port}`);
+  if (bridge) console.log(`AliceRealm local approval UI is ready on ${bridge.baseURL}`);
+});
 
-function shutdown() { server.close(() => process.exit(0)); }
+function shutdown() {
+  bridge?.removeState();
+  server.close(() => process.exit(0));
+}
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
+export { bridge };

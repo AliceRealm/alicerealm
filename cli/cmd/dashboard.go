@@ -17,6 +17,72 @@ import (
 
 const dashboardLinkTTL = 15 * time.Minute
 
+type dashboardLoginLink struct {
+	URL       string `json:"url"`
+	ExpiresAt int64  `json:"expires_at,omitempty"`
+	ExpiresIn int    `json:"expires_in_seconds,omitempty"`
+	Version   string `json:"version"`
+}
+
+func createDashboardLoginLink(serverOverride string) (dashboardLoginLink, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return dashboardLoginLink{}, err
+	}
+	srv, err := cfg.GetActive(serverOverride)
+	if err != nil {
+		return dashboardLoginLink{}, err
+	}
+	if _, v2Err := auth.LoadV2Credentials(srv.Name); v2Err == nil {
+		v2Client, _, err := newV2ClientForServer(srv.Name, true)
+		if err != nil {
+			if !consoleV2Unavailable(err) {
+				return dashboardLoginLink{}, err
+			}
+		} else {
+			browserNonce, err := newBrowserNonce()
+			if err != nil {
+				return dashboardLoginLink{}, err
+			}
+			response, postErr := v2Client.Post("/console/handoffs", map[string]interface{}{
+				"browser_nonce": browserNonce, "client_capabilities": []string{"account_recovery_v1"},
+			})
+			if postErr == nil {
+				var data struct {
+					URL       string `json:"handoff_url"`
+					ExpiresAt int64  `json:"expires_at"`
+				}
+				if json.Unmarshal(response.Data, &data) != nil || data.URL == "" {
+					return dashboardLoginLink{}, fmt.Errorf("could not read Console V2 handoff from response")
+				}
+				return dashboardLoginLink{URL: data.URL, ExpiresAt: data.ExpiresAt, Version: "v2"}, nil
+			}
+			if !consoleV2Unavailable(postErr) {
+				return dashboardLoginLink{}, postErr
+			}
+		}
+	}
+	c := newClient()
+	resp, err := c.Post("/console/auth-code", nil)
+	if err != nil {
+		return dashboardLoginLink{}, err
+	}
+	if resp.Code != 0 {
+		return dashboardLoginLink{}, fmt.Errorf("%s", resp.Msg)
+	}
+	var data struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(resp.Data, &data); err != nil || data.Code == "" {
+		return dashboardLoginLink{}, fmt.Errorf("could not read auth code from response")
+	}
+	return dashboardLoginLink{
+		URL:       fmt.Sprintf("%s/dashboard?code=%s", strings.TrimRight(srv.Endpoint, "/"), data.Code),
+		ExpiresIn: int(dashboardLinkTTL.Seconds()),
+		Version:   "legacy",
+	}, nil
+}
+
 var dashboardCmd = &cobra.Command{
 	Use:   "dashboard",
 	Short: "Open the web dashboard or search your Dashboard records",
@@ -28,68 +94,19 @@ dashboard links are valid for 15 minutes and can be used once.
 
 Hand the printed URL to the user (e.g. "open your dashboard: <url>").
 
-Example:
+	Example:
 	  alicerealm dashboard`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load()
+		link, err := createDashboardLoginLink(serverFlag)
 		if err != nil {
 			return err
 		}
-		srv, err := cfg.GetActive(serverFlag)
-		if err != nil {
-			return err
+		if link.Version == "v2" {
+			output.PrintMessage("Console V2 link (valid 72 hours, redeemable once in any browser):")
+		} else {
+			output.PrintMessage("One-time dashboard login link (valid 15 min, single use):")
 		}
-		if _, v2Err := auth.LoadV2Credentials(srv.Name); v2Err == nil {
-			v2Client, _, err := newV2ClientForServer(srv.Name, true)
-			if err != nil {
-				if !consoleV2Unavailable(err) {
-					return err
-				}
-			} else {
-				browserNonce, err := newBrowserNonce()
-				if err != nil {
-					return err
-				}
-				response, postErr := v2Client.Post("/console/handoffs", map[string]interface{}{
-					"browser_nonce": browserNonce, "client_capabilities": []string{"account_recovery_v1"},
-				})
-				if postErr == nil {
-					var data struct {
-						URL       string `json:"handoff_url"`
-						ExpiresAt int64  `json:"expires_at"`
-					}
-					if json.Unmarshal(response.Data, &data) != nil || data.URL == "" {
-						return fmt.Errorf("could not read Console V2 handoff from response")
-					}
-					output.PrintMessage("Console V2 link (valid 72 hours, redeemable once in any browser):")
-					output.PrintData(map[string]interface{}{"url": data.URL, "expires_at": data.ExpiresAt}, resolveFormat())
-					return nil
-				}
-				if !consoleV2Unavailable(postErr) {
-					return postErr
-				}
-			}
-		}
-		c := newClient()
-		resp, err := c.Post("/console/auth-code", nil)
-		if err != nil {
-			return err
-		}
-		if resp.Code != 0 {
-			return fmt.Errorf("%s", resp.Msg)
-		}
-		var data struct {
-			Code string `json:"code"`
-		}
-		if err := json.Unmarshal(resp.Data, &data); err != nil || data.Code == "" {
-			return fmt.Errorf("could not read auth code from response")
-		}
-
-		// The web dashboard is served from the same host as the API server.
-		url := fmt.Sprintf("%s/dashboard?code=%s", strings.TrimRight(srv.Endpoint, "/"), data.Code)
-
-		output.PrintMessage("One-time dashboard login link (valid 15 min, single use):")
-		output.PrintData(map[string]interface{}{"url": url, "expires_in_seconds": int(dashboardLinkTTL.Seconds())}, resolveFormat())
+		output.PrintData(link, resolveFormat())
 		return nil
 	},
 }
