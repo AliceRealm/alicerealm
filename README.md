@@ -54,6 +54,17 @@ go build -o ../build/alicerealm .
 ../build/alicerealm version
 ```
 
+On Windows, start the local AliceRealm approval App directly or install
+Start-menu and desktop shortcuts:
+
+```powershell
+./scripts/local/start-user-app.ps1 -AppWindow
+./scripts/local/install-user-app.ps1
+```
+
+Use `scripts/local/stop-user-app.ps1` to close it and
+`scripts/local/uninstall-user-app.ps1` to remove only the shortcuts.
+
 New installations use:
 
 ```text

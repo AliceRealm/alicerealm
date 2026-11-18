@@ -11,6 +11,9 @@ if ([string]::IsNullOrWhiteSpace($AgentHome)) {
     }
 }
 $AgentHome = [System.IO.Path]::GetFullPath($AgentHome)
+if ((Split-Path $AgentHome -Leaf) -ne ".alicerealm") {
+    $AgentHome = Join-Path $AgentHome ".alicerealm"
+}
 $stateFile = Join-Path $AgentHome "app\bridge.json"
 if (-not (Test-Path -LiteralPath $stateFile -PathType Leaf)) {
     Write-Output "AliceRealm App is not running for $AgentHome"

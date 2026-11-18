@@ -1,7 +1,8 @@
 param(
     [int]$Port = 4181,
     [string]$AgentHome = "",
-    [switch]$NoBrowser
+    [switch]$NoBrowser,
+    [switch]$AppWindow
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,6 +20,9 @@ if ([string]::IsNullOrWhiteSpace($AgentHome)) {
     }
 }
 $AgentHome = [System.IO.Path]::GetFullPath($AgentHome)
+if ((Split-Path $AgentHome -Leaf) -ne ".alicerealm") {
+    $AgentHome = Join-Path $AgentHome ".alicerealm"
+}
 $appStateDir = Join-Path $AgentHome "app"
 New-Item -ItemType Directory -Force -Path $appStateDir | Out-Null
 
@@ -79,4 +83,19 @@ if (-not $state) {
 
 $uiURL = "$($state.base_url)/local/setup#ui_token=$uiToken"
 Write-Output "AliceRealm App is running: $($state.base_url)"
-if (-not $NoBrowser) { Start-Process $uiURL }
+if (-not $NoBrowser) {
+    $edgeCandidates = @(
+        (Join-Path ${env:ProgramFiles(x86)} "Microsoft\Edge\Application\msedge.exe"),
+        (Join-Path $env:ProgramFiles "Microsoft\Edge\Application\msedge.exe"),
+        (Join-Path $env:LOCALAPPDATA "Microsoft\Edge\Application\msedge.exe")
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    $edge = $edgeCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+    if ($AppWindow -and $edge) {
+        Start-Process -FilePath $edge -ArgumentList @("--app=$uiURL", "--new-window") | Out-Null
+    } else {
+        if ($AppWindow) {
+            Write-Warning "Microsoft Edge was not found; opening AliceRealm in the default browser."
+        }
+        Start-Process $uiURL | Out-Null
+    }
+}

@@ -30,6 +30,20 @@ Start the desktop-mode App on Windows with:
 ./scripts/local/start-user-app.ps1
 ```
 
+Install Start menu and desktop shortcuts for an Edge app-mode window with:
+
+```powershell
+./scripts/local/install-user-app.ps1
+```
+
+The installer adds `AliceRealm` and `Stop AliceRealm` shortcuts. It does not
+copy credentials, install an Agent, or require administrator privileges. Remove
+only these shortcuts (while preserving Agent identity and social data) with:
+
+```powershell
+./scripts/local/uninstall-user-app.ps1
+```
+
 It opens a one-time UI URL on `127.0.0.1:4181`. The UI token is kept out of the
 Agent-readable Bridge state. Stop it with:
 
