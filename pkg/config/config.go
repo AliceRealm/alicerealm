@@ -19,7 +19,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-const defaultProjectName = "myhub"
+const defaultProjectName = "alicerealm"
 
 type RegLimit struct {
 	WindowSec   int
@@ -50,6 +50,7 @@ type Config struct {
 	RedisAddr                   string
 	RedisPassword               string
 	ProjectName                 string
+	ServiceBindAddress          string
 	PublicBaseURL               string
 	ESUsername                  string
 	ESPassword                  string
@@ -284,14 +285,15 @@ func Load() *Config {
 
 	return &Config{
 		EtcdAddr:                    getEnv("ETCD_ADDR", "localhost:"+etcdPort),
-		PgDSN:                       getEnv("PG_DSN", "postgres://eigenflux:eigenflux123@localhost:"+postgresPort+"/eigenflux?sslmode=disable"),
+		PgDSN:                       getEnv("PG_DSN", "postgres://alicerealm:alicerealm123@localhost:"+postgresPort+"/alicerealm?sslmode=disable"),
 		RedisAddr:                   getEnv("REDIS_ADDR", "localhost:"+redisPort),
 		RedisPassword:               getEnv("REDIS_PASSWORD", ""),
 		ProjectName:                 getEnv("PROJECT_NAME", defaultProjectName),
+		ServiceBindAddress:          getEnv("SERVICE_BIND_ADDRESS", ""),
 		PublicBaseURL:               getEnv("PUBLIC_BASE_URL", ""),
 		ESUsername:                  getEnv("ES_USERNAME", ""),
 		ESPassword:                  getEnv("ES_PASSWORD", ""),
-		IDWorkerPrefix:              getEnv("ID_WORKER_PREFIX", "/eigenflux/idgen/workers"),
+		IDWorkerPrefix:              getEnv("ID_WORKER_PREFIX", "/alicerealm/idgen/workers"),
 		IDSnowflakeEpoch:            getEnvInt64("ID_SNOWFLAKE_EPOCH_MS", 1704067200000), // 2024-01-01 00:00:00 UTC
 		IDWorkerLeaseTTL:            getEnvInt("ID_WORKER_LEASE_TTL", 30),
 		IDInstanceID:                getEnv("ID_INSTANCE_ID", ""),
@@ -413,8 +415,8 @@ func Load() *Config {
 		CommissionIntegrationFlag:    getEnv("COMMISSION_INTEGRATION_MODE", ""),
 		IntegrationControlAddr:       getEnv("INTEGRATION_CONTROL_ADDR", ""),
 		IntegrationControlToken:      getEnv("INTEGRATION_CONTROL_TOKEN", ""),
-		OfficialAgentEmail:           getEnv("OFFICIAL_AGENT_EMAIL", "eigenfluxofficial@gmail.com"),
-		OfficialAgentName:            getEnv("OFFICIAL_AGENT_NAME", "eigenflux 官方助手"),
+		OfficialAgentEmail:           getEnv("OFFICIAL_AGENT_EMAIL", "official@alicerealm.com"),
+		OfficialAgentName:            getEnv("OFFICIAL_AGENT_NAME", "AliceRealm 官方助手"),
 		OfficialAgentBio:             getEnv("OFFICIAL_AGENT_BIO", "你好，我是 Vic 老师，有什么可以帮助你的？"),
 		OfficialWelcomeMessage:       getEnv("OFFICIAL_WELCOME_MESSAGE", "你好我是 vic 老师，我有什么可以帮助你的？"),
 		EnableOfficialWelcome:        getEnvBool("ENABLE_OFFICIAL_WELCOME", true),
@@ -459,22 +461,22 @@ func Load() *Config {
 		EnableSwingI2IRecall:         getEnvBool("ENABLE_SWING_I2I_RECALL", false),
 		SwingI2IRecallSeeds:          getEnvInt("SWING_I2I_RECALL_SEEDS", 20),
 		SwingI2IRecallK:              getEnvInt("SWING_I2I_RECALL_K", 100),
-		PGCEmailSuffixes:             getEnvStringList("PGC_EMAIL_SUFFIXES", []string{"@bot.eigenflux.one", "@pgc.eigenflux.one"}),
+		PGCEmailSuffixes:             getEnvStringList("PGC_EMAIL_SUFFIXES", []string{"@bot.alicerealm.com", "@pgc.alicerealm.com"}),
 		BlockedAgentEmails:           getEnvStringList("BLOCKED_AGENT_EMAILS", []string{"fmw19990718@gmail.com"}),
 		LRRankerEnabled:              getEnvBool("LR_RANKER_ENABLED", false),
-		LRRankerModelPath:            getEnv("LR_RANKER_MODEL_PATH", "/data/models/eigenflux/lr-ranker/current/model.json"),
+		LRRankerModelPath:            getEnv("LR_RANKER_MODEL_PATH", "/data/models/alicerealm/lr-ranker/current/model.json"),
 		LRRankerReloadInterval:       getEnv("LR_RANKER_RELOAD_INTERVAL", "60s"),
 		DiscoveryConsumedRefillBPS:   getEnvInt("DISCOVERY_CONSUMED_REFILL_BPS", 0),
 		DiscoveryNeedBudgetBPS:       getEnvInt("DISCOVERY_NEED_BUDGET_BPS", 0),
 		DiscoveryNeedRecallBPS:       getEnvInt("DISCOVERY_NEED_RECALL_BPS", 0),
 		DiscoveryProfileSemanticBPS:  getEnvInt("DISCOVERY_PROFILE_SEMANTIC_BPS", 0),
 		DiscoveryLREnabled:           getEnvBool("DISCOVERY_LR_ENABLED", false),
-		DiscoveryLRModelPath:         getEnv("DISCOVERY_LR_MODEL_PATH", "/data/models/eigenflux/discovery-lr/current/model.json"),
+		DiscoveryLRModelPath:         getEnv("DISCOVERY_LR_MODEL_PATH", "/data/models/alicerealm/discovery-lr/current/model.json"),
 		DiscoveryLRReloadInterval:    getEnv("DISCOVERY_LR_RELOAD_INTERVAL", "60s"),
 		DiscoveryRatingLRBPS:         getEnvInt("DISCOVERY_RATING_LR_BPS", 0),
-		DiscoveryRatingLRModelPath:   getEnv("DISCOVERY_RATING_LR_MODEL_PATH", "/data/models/eigenflux/discovery-rating-lr/current/model.json"),
+		DiscoveryRatingLRModelPath:   getEnv("DISCOVERY_RATING_LR_MODEL_PATH", "/data/models/alicerealm/discovery-rating-lr/current/model.json"),
 		DiscoveryRatingLRV2BPS:       getEnvInt("DISCOVERY_RATING_LR_V2_BPS", 0),
-		DiscoveryRatingLRV2ModelPath: getEnv("DISCOVERY_RATING_LR_V2_MODEL_PATH", "/data/models/eigenflux/discovery-rating-lr-v2/current/model.json"),
+		DiscoveryRatingLRV2ModelPath: getEnv("DISCOVERY_RATING_LR_V2_MODEL_PATH", "/data/models/alicerealm/discovery-rating-lr-v2/current/model.json"),
 		FeatureIndexConfigDir:        getEnv("FEATURE_INDEX_CONFIG_DIR", "configs/featureindex"),
 		FeatureIndexReloadInterval:   getEnv("FEATURE_INDEX_RELOAD_INTERVAL", "5s"),
 		RecallRedisNamespace:         getEnv("REC_REDIS_NAMESPACE", "rec"),
@@ -645,6 +647,9 @@ func (c *Config) ShouldDisableDedup() bool {
 }
 
 func (c *Config) ListenAddr(port int) string {
+	if strings.TrimSpace(c.ServiceBindAddress) != "" {
+		return net.JoinHostPort(strings.TrimSpace(c.ServiceBindAddress), strconv.Itoa(port))
+	}
 	return fmt.Sprintf(":%d", port)
 }
 

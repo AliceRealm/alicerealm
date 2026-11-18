@@ -75,7 +75,7 @@ const formatTimestamp = (ts: number) => {
 const TemplatePreview = ({ value }: { value: string }) => (
   <Typography.Paragraph
     copyable={{ tooltips: false }}
-    ellipsis={{ rows: 2, expandable: true, symbol: "more" }}
+    ellipsis={{ rows: 2, expandable: true, symbol: "展开" }}
     style={{ marginBottom: 0, maxWidth: 520, whiteSpace: "pre-wrap" }}
   >
     {value}
@@ -131,14 +131,14 @@ export const MilestoneRuleList = () => {
     try {
       const { data } = await axios.post<RuleMutationResp>(`${consoleApiUrl}/milestone-rules`, values);
       if (data.code !== 0) {
-        throw new Error(data.msg || "Create milestone rule failed");
+        throw new Error(data.msg || "创建里程碑规则失败");
       }
-      messageApi.success("Milestone rule created");
+      messageApi.success("里程碑规则已创建");
       setCreateOpen(false);
       createForm.resetFields();
       await refetchRules();
     } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : "Create milestone rule failed");
+      messageApi.error(error instanceof Error ? error.message : "创建里程碑规则失败");
     } finally {
       setSubmitting(false);
     }
@@ -154,14 +154,14 @@ export const MilestoneRuleList = () => {
         values
       );
       if (data.code !== 0) {
-        throw new Error(data.msg || "Update milestone rule failed");
+        throw new Error(data.msg || "更新里程碑规则失败");
       }
-      messageApi.success("Milestone rule updated");
+      messageApi.success("里程碑规则已更新");
       setEditOpen(false);
       setEditingRule(null);
       await refetchRules();
     } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : "Update milestone rule failed");
+      messageApi.error(error instanceof Error ? error.message : "更新里程碑规则失败");
     } finally {
       setSubmitting(false);
     }
@@ -177,14 +177,14 @@ export const MilestoneRuleList = () => {
         values
       );
       if (data.code !== 0) {
-        throw new Error(data.msg || "Replace milestone rule failed");
+        throw new Error(data.msg || "替换里程碑规则失败");
       }
-      messageApi.success("Milestone rule replaced");
+      messageApi.success("里程碑规则已替换");
       setReplaceOpen(false);
       setReplacingRule(null);
       await refetchRules();
     } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : "Replace milestone rule failed");
+      messageApi.error(error instanceof Error ? error.message : "替换里程碑规则失败");
     } finally {
       setSubmitting(false);
     }
@@ -212,67 +212,67 @@ export const MilestoneRuleList = () => {
 
   const columns: ColumnsType<MilestoneRule> = [
     {
-      title: "Rule ID",
+      title: "规则 ID",
       dataIndex: "rule_id",
       key: "rule_id",
       width: 120,
       fixed: "left",
     },
     {
-      title: "Metric",
+      title: "指标",
       dataIndex: "metric_key",
       key: "metric_key",
       width: 120,
       render: (value: string) => <Tag color="blue">{value}</Tag>,
     },
     {
-      title: "Threshold",
+      title: "阈值",
       dataIndex: "threshold",
       key: "threshold",
       width: 120,
     },
     {
-      title: "Enabled",
+      title: "启用状态",
       dataIndex: "rule_enabled",
       key: "rule_enabled",
       width: 110,
       render: (enabled: boolean) => (
-        <Tag color={enabled ? "success" : "default"}>{enabled ? "Enabled" : "Disabled"}</Tag>
+        <Tag color={enabled ? "success" : "default"}>{enabled ? "已启用" : "已停用"}</Tag>
       ),
     },
     {
-      title: "Content Template",
+      title: "内容模板",
       dataIndex: "content_template",
       key: "content_template",
       width: 560,
       render: (value: string) => <TemplatePreview value={value} />,
     },
     {
-      title: "Updated At",
+      title: "更新时间",
       dataIndex: "updated_at",
       key: "updated_at",
       width: 180,
       render: (value: number) => formatTimestamp(value),
     },
     {
-      title: "Created At",
+      title: "创建时间",
       dataIndex: "created_at",
       key: "created_at",
       width: 180,
       render: (value: number) => formatTimestamp(value),
     },
     {
-      title: "Actions",
+      title: "操作",
       key: "actions",
       width: 180,
       fixed: "right",
       render: (_, record) => (
         <Space>
           <Button size="small" onClick={() => openEditModal(record)}>
-            Edit
+            编辑
           </Button>
           <Button size="small" onClick={() => openReplaceModal(record)}>
-            Replace
+            替换
           </Button>
         </Space>
       ),
@@ -297,11 +297,11 @@ export const MilestoneRuleList = () => {
                 setCreateOpen(true);
               }}
             >
-              New Rule
+              新建规则
             </Button>
             <Select
               allowClear
-              placeholder="Filter by metric"
+              placeholder="按指标筛选"
               style={{ width: 160 }}
               value={metricFilter}
               options={metricOptions}
@@ -312,12 +312,12 @@ export const MilestoneRuleList = () => {
             />
             <Select
               allowClear
-              placeholder="Filter by enabled"
+              placeholder="按启用状态筛选"
               style={{ width: 160 }}
               value={enabledFilter}
               options={[
-                { label: "Enabled", value: true },
-                { label: "Disabled", value: false },
+                { label: "已启用", value: true },
+                { label: "已停用", value: false },
               ]}
               onChange={(value) => {
                 setEnabledFilter(value);
@@ -331,7 +331,7 @@ export const MilestoneRuleList = () => {
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message="Changing metric_key or threshold should go through Replace so the old rule is disabled and the new rule gets a fresh rule_id."
+          message="如需修改指标或阈值，请使用“替换”。系统会停用旧规则，并为新规则分配新的规则 ID。"
         />
         <Table
           dataSource={query.data?.data}
@@ -354,7 +354,7 @@ export const MilestoneRuleList = () => {
       </List>
 
       <Modal
-        title="Create Milestone Rule"
+        title="新建里程碑规则"
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
         onOk={() => void handleCreate()}
@@ -362,27 +362,27 @@ export const MilestoneRuleList = () => {
         destroyOnHidden
       >
         <Form form={createForm} layout="vertical">
-          <Form.Item name="metric_key" label="Metric" rules={[{ required: true }]}>
+          <Form.Item name="metric_key" label="指标" rules={[{ required: true }]}>
             <Select options={metricOptions} />
           </Form.Item>
           <Form.Item
             name="threshold"
-            label="Threshold"
+            label="阈值"
             rules={[{ required: true, type: "number", min: 1 }]}
           >
             <InputNumber min={1} style={{ width: "100%" }} />
           </Form.Item>
-          <Form.Item name="rule_enabled" label="Enabled" valuePropName="checked">
+          <Form.Item name="rule_enabled" label="启用" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Form.Item name="content_template" label="Content Template" rules={[{ required: true }]}>
+          <Form.Item name="content_template" label="内容模板" rules={[{ required: true }]}>
             <Input.TextArea rows={5} />
           </Form.Item>
         </Form>
       </Modal>
 
       <Modal
-        title={editingRule ? `Edit Rule #${editingRule.rule_id}` : "Edit Rule"}
+        title={editingRule ? `编辑规则 #${editingRule.rule_id}` : "编辑规则"}
         open={editOpen}
         onCancel={() => {
           setEditOpen(false);
@@ -393,17 +393,17 @@ export const MilestoneRuleList = () => {
         destroyOnHidden
       >
         <Form form={editForm} layout="vertical">
-          <Form.Item name="rule_enabled" label="Enabled" valuePropName="checked">
+          <Form.Item name="rule_enabled" label="启用" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Form.Item name="content_template" label="Content Template" rules={[{ required: true }]}>
+          <Form.Item name="content_template" label="内容模板" rules={[{ required: true }]}>
             <Input.TextArea rows={5} />
           </Form.Item>
         </Form>
       </Modal>
 
       <Modal
-        title={replacingRule ? `Replace Rule #${replacingRule.rule_id}` : "Replace Rule"}
+        title={replacingRule ? `替换规则 #${replacingRule.rule_id}` : "替换规则"}
         open={replaceOpen}
         onCancel={() => {
           setReplaceOpen(false);
@@ -417,23 +417,23 @@ export const MilestoneRuleList = () => {
           type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          message="Replace will disable the current rule and create a new one."
+          message="替换操作会停用当前规则，并创建一条新规则。"
         />
         <Form form={replaceForm} layout="vertical">
-          <Form.Item name="metric_key" label="Metric" rules={[{ required: true }]}>
+          <Form.Item name="metric_key" label="指标" rules={[{ required: true }]}>
             <Select options={metricOptions} />
           </Form.Item>
           <Form.Item
             name="threshold"
-            label="Threshold"
+            label="阈值"
             rules={[{ required: true, type: "number", min: 1 }]}
           >
             <InputNumber min={1} style={{ width: "100%" }} />
           </Form.Item>
-          <Form.Item name="rule_enabled" label="New Rule Enabled" valuePropName="checked">
+          <Form.Item name="rule_enabled" label="启用新规则" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Form.Item name="content_template" label="Content Template" rules={[{ required: true }]}>
+          <Form.Item name="content_template" label="内容模板" rules={[{ required: true }]}>
             <Input.TextArea rows={5} />
           </Form.Item>
         </Form>

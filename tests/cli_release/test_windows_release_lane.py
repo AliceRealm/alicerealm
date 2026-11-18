@@ -15,7 +15,7 @@ class WindowsReleaseLane(unittest.TestCase):
         if not shell:
             self.skipTest('PowerShell required')
         source = (ROOT / 'static/install.ps1').read_text(encoding='utf-8')
-        function = source[source.index('function Get-LatestCliVersion {'):source.index('function Install-Cli {')]
+        function = source[source.index('function Get-VersionPointer {'):source.index('function Install-Cli {')]
         fixture = function + '''
 class ReleaseLaneHttpException : System.Exception {
  [object]$Response
@@ -27,14 +27,23 @@ $script:calls = @()
 function Invoke-RestMethod {
  param($Uri, $TimeoutSec)
  $script:calls += $Uri
+ if ($Uri -like '*/cli/windows/latest/version.txt') {
+  switch ($env:MODE) {
+   windows_ok { return '1.0.31' }
+   windows_malformed { return '<html>' }
+   windows_network_error { throw 'network error' }
+   windows_server_error { throw [ReleaseLaneHttpException]::new(503) }
+   default { throw [ReleaseLaneHttpException]::new(404) }
+  }
+ }
  if ($Uri -like '*/cli/v2/latest/version.txt') {
   switch ($env:MODE) {
-   ok { return '1.0.6' }
-   malformed { return '<html>' }
-   network_error { throw 'network error' }
+   v2_ok { return '1.0.6' }
+   v2_malformed { return '<html>' }
+   v2_network_error { throw 'network error' }
+   v2_server_error { throw [ReleaseLaneHttpException]::new(503) }
    default {
-    $code = if ($env:MODE -eq 'absent') { 404 } else { 503 }
-    throw [ReleaseLaneHttpException]::new($code)
+    throw [ReleaseLaneHttpException]::new(404)
    }
   }
  }
@@ -47,8 +56,18 @@ Write-Output "CALLS=$($script:calls.Count)"
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / 'fixture.ps1'
             path.write_text(fixture, encoding='utf-8-sig')
-            for mode, expected, count in [('ok', '1.0.6', 1), ('absent', '1.0.5', 2),
-                                          ('server_error', None, 1), ('network_error', None, 1), ('malformed', None, 1)]:
+            cases = [
+                ('windows_ok', '1.0.31', 1),
+                ('v2_ok', '1.0.6', 2),
+                ('all_absent', '1.0.5', 3),
+                ('windows_server_error', None, 1),
+                ('windows_network_error', None, 1),
+                ('windows_malformed', None, 1),
+                ('v2_server_error', None, 2),
+                ('v2_network_error', None, 2),
+                ('v2_malformed', None, 2),
+            ]
+            for mode, expected, count in cases:
                 with self.subTest(mode=mode):
                     result=subprocess.run([shell,'-NoProfile','-File',str(path)],env=dict(os.environ,MODE=mode),capture_output=True,text=True)
                     self.assertEqual(result.returncode,0,result.stderr)

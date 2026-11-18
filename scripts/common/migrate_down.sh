@@ -11,7 +11,7 @@ if [[ -f .env ]]; then
   set +a
 fi
 
-PG_DSN=${PG_DSN:-postgres://eigenflux:eigenflux123@localhost:5432/eigenflux?sslmode=disable}
+PG_DSN=${PG_DSN:-postgres://alicerealm:alicerealm123@localhost:5432/alicerealm?sslmode=disable}
 TARGET_VERSION=${1:-}
 
 if command -v mise >/dev/null 2>&1 && [[ -f "$PROJECT_ROOT/mise.toml" ]]; then

@@ -53,7 +53,7 @@ const LongText = ({ text, maxWidth = 200 }: { text: string | null; maxWidth?: nu
   return (
     <Typography.Paragraph
       copyable={{ tooltips: false }}
-      ellipsis={{ rows: 5, expandable: true, symbol: "more" }}
+      ellipsis={{ rows: 5, expandable: true, symbol: "展开" }}
       style={{ marginBottom: 0, maxWidth, whiteSpace: "pre-wrap" }}
     >
       {text}
@@ -96,10 +96,10 @@ export const ItemList = () => {
     setAgentModalOpen(true);
     try {
       const { data } = await axios.get(`${consoleApiUrl}/agents/${agentId}`);
-      if (data.code !== 0) throw new Error(data.msg || "Failed to fetch agent");
+      if (data.code !== 0) throw new Error(data.msg || "获取智能体失败");
       setAgentDetail(data.data.agent);
     } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : "Failed to fetch agent details");
+      messageApi.error(error instanceof Error ? error.message : "获取智能体详情失败");
       setAgentModalOpen(false);
     } finally {
       setAgentLoading(false);
@@ -110,11 +110,11 @@ export const ItemList = () => {
     setUpdatingItemId(itemId);
     try {
       const { data } = await axios.put(`${consoleApiUrl}/items/${itemId}`, { status: newStatus });
-      if (data.code !== 0) throw new Error(data.msg || "Update failed");
-      messageApi.success("Status updated");
+      if (data.code !== 0) throw new Error(data.msg || "更新失败");
+      messageApi.success("状态已更新");
       await query.refetch();
     } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : "Failed to update status");
+      messageApi.error(error instanceof Error ? error.message : "更新状态失败");
     } finally {
       setUpdatingItemId(null);
       setEditingStatusItemId(null);
@@ -148,7 +148,7 @@ export const ItemList = () => {
       fixed: "left",
     },
     {
-      title: "Author Agent ID",
+      title: "作者智能体 ID",
       dataIndex: "author_agent_id",
       key: "author_agent_id",
       width: 130,
@@ -157,21 +157,21 @@ export const ItemList = () => {
       ),
     },
     {
-      title: "Raw Content",
+      title: "原始内容",
       dataIndex: "raw_content",
       key: "raw_content",
       width: 220,
       render: (text: string) => <LongText text={text} maxWidth={220} />,
     },
     {
-      title: "Summary",
+      title: "摘要",
       dataIndex: "summary",
       key: "summary",
       width: 220,
       render: (text: string | null) => <LongText text={text} maxWidth={220} />,
     },
     {
-      title: "Status",
+      title: "状态",
       dataIndex: "status",
       key: "status",
       width: 140,
@@ -215,14 +215,14 @@ export const ItemList = () => {
       },
     },
     {
-      title: "Broadcast Type",
+      title: "广播类型",
       dataIndex: "broadcast_type",
       key: "broadcast_type",
       width: 140,
       render: (type: string | null) => type ? <Tag>{type}</Tag> : "-",
     },
     {
-      title: "Domains",
+      title: "领域",
       dataIndex: "domains",
       key: "domains",
       width: 180,
@@ -237,7 +237,7 @@ export const ItemList = () => {
       },
     },
     {
-      title: "Keywords",
+      title: "关键词",
       dataIndex: "keywords",
       key: "keywords",
       width: 200,
@@ -247,7 +247,7 @@ export const ItemList = () => {
         return (
           <Typography.Paragraph
             copyable={{ tooltips: false }}
-            ellipsis={{ rows: 5, expandable: true, symbol: "more" }}
+            ellipsis={{ rows: 5, expandable: true, symbol: "展开" }}
             style={{ marginBottom: 0, maxWidth: 200, whiteSpace: "pre-wrap" }}
           >
             {joined}
@@ -256,7 +256,7 @@ export const ItemList = () => {
       },
     },
     {
-      title: "Raw URL",
+      title: "原始链接",
       dataIndex: "raw_url",
       key: "raw_url",
       width: 160,
@@ -270,63 +270,63 @@ export const ItemList = () => {
         ) : "-",
     },
     {
-      title: "Raw Notes",
+      title: "原始备注",
       dataIndex: "raw_notes",
       key: "raw_notes",
       width: 180,
       render: (text: string) => <LongText text={text || null} maxWidth={180} />,
     },
     {
-      title: "Source Type",
+      title: "来源类型",
       dataIndex: "source_type",
       key: "source_type",
       width: 130,
       render: (type: string | null) => type ? <Tag>{type}</Tag> : "-",
     },
     {
-      title: "Expire Time",
+      title: "过期时间",
       dataIndex: "expire_time",
       key: "expire_time",
       width: 160,
       render: (t: string | null) => t || "-",
     },
     {
-      title: "Geo",
+      title: "地区",
       dataIndex: "geo",
       key: "geo",
       width: 120,
       render: (geo: string | null) => geo || "-",
     },
     {
-      title: "Expected Response",
+      title: "期望响应",
       dataIndex: "expected_response",
       key: "expected_response",
       width: 200,
       render: (text: string | null) => <LongText text={text} maxWidth={200} />,
     },
     {
-      title: "Group ID",
+      title: "分组 ID",
       dataIndex: "group_id",
       key: "group_id",
       width: 120,
       render: (id: string | null) => id || "-",
     },
     {
-      title: "Created At",
+      title: "创建时间",
       dataIndex: "created_at",
       key: "created_at",
       width: 180,
       render: (ts: number) => formatTimestamp(ts),
     },
     {
-      title: "Updated At",
+      title: "更新时间",
       dataIndex: "updated_at",
       key: "updated_at",
       width: 180,
       render: (ts: number) => formatTimestamp(ts),
     },
     {
-      title: "Actions",
+      title: "操作",
       key: "actions",
       width: 150,
       fixed: "right",
@@ -337,7 +337,7 @@ export const ItemList = () => {
             navigate(`/conversations?item_id=${encodeURIComponent(record.item_id)}`)
           }
         >
-          Conversations
+          查看会话
         </Button>
       ),
     },
@@ -350,7 +350,7 @@ export const ItemList = () => {
         headerButtons={
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             <Input.Search
-              placeholder="Item ID"
+              placeholder="内容 ID"
               allowClear
               inputMode="numeric"
               defaultValue={itemIdFilter}
@@ -358,7 +358,7 @@ export const ItemList = () => {
               style={{ width: 140 }}
             />
             <Input.Search
-              placeholder="Group ID"
+              placeholder="分组 ID"
               allowClear
               inputMode="numeric"
               defaultValue={groupIdFilter}
@@ -366,7 +366,7 @@ export const ItemList = () => {
               style={{ width: 140 }}
             />
             <Input.Search
-              placeholder="Agent ID"
+              placeholder="智能体 ID"
               allowClear
               inputMode="numeric"
               defaultValue={authorAgentIdFilter}
@@ -374,30 +374,30 @@ export const ItemList = () => {
               style={{ width: 140 }}
             />
             <Input.Search
-              placeholder="Search keywords"
+              placeholder="搜索关键词"
               allowClear
               defaultValue={keywordFilter}
               onSearch={(value) => { setKeywordFilter(value); setCurrent(1); }}
               style={{ width: 180 }}
             />
             <Select
-              placeholder="Filter by status"
+              placeholder="按状态筛选"
               allowClear
               value={statusFilter}
               onChange={(value) => { setStatusFilter(value); setCurrent(1); }}
               style={{ width: 150 }}
               options={[
-                { label: "Pending", value: 0 },
-                { label: "Processing", value: 1 },
-                { label: "Failed", value: 2 },
-                { label: "Completed", value: 3 },
-                { label: "Discarded", value: 4 },
-                { label: "Deleted", value: 5 },
+                { label: "待处理", value: 0 },
+                { label: "处理中", value: 1 },
+                { label: "失败", value: 2 },
+                { label: "已完成", value: 3 },
+                { label: "已丢弃", value: 4 },
+                { label: "已删除", value: 5 },
               ]}
             />
             <Select
               mode="tags"
-              placeholder="Include email suffixes"
+              placeholder="包含邮箱后缀"
               value={includeSuffixes}
               onChange={(values) => { setIncludeSuffixes(values); setCurrent(1); }}
               style={{ minWidth: 220 }}
@@ -405,7 +405,7 @@ export const ItemList = () => {
             />
             <Select
               mode="tags"
-              placeholder="Exclude email suffixes"
+              placeholder="排除邮箱后缀"
               value={excludeSuffixes}
               onChange={(values) => { setExcludeSuffixes(values); setCurrent(1); }}
               style={{ minWidth: 220 }}
@@ -435,7 +435,7 @@ export const ItemList = () => {
       </List>
 
       <Modal
-        title={agentDetail ? `Agent: ${agentDetail.agent_name || agentDetail.agent_id}` : "Agent Details"}
+        title={agentDetail ? `智能体：${agentDetail.agent_name || agentDetail.agent_id}` : "智能体详情"}
         open={agentModalOpen}
         onCancel={() => {
           setAgentModalOpen(false);
@@ -448,24 +448,24 @@ export const ItemList = () => {
         {agentDetail && (
           <Descriptions column={1} bordered size="small">
             <Descriptions.Item label="ID">{agentDetail.agent_id}</Descriptions.Item>
-            <Descriptions.Item label="Name">{agentDetail.agent_name}</Descriptions.Item>
-            <Descriptions.Item label="Email">{agentDetail.email}</Descriptions.Item>
-            <Descriptions.Item label="Bio">{agentDetail.bio || "-"}</Descriptions.Item>
-            <Descriptions.Item label="Profile Status">
+            <Descriptions.Item label="名称">{agentDetail.agent_name}</Descriptions.Item>
+            <Descriptions.Item label="邮箱">{agentDetail.email}</Descriptions.Item>
+            <Descriptions.Item label="简介">{agentDetail.bio || "-"}</Descriptions.Item>
+            <Descriptions.Item label="资料状态">
               {agentDetail.profile_status !== null && agentDetail.profile_status !== undefined
                 ? (() => {
-                    const statusLabels: Record<number, string> = { 0: "Pending", 1: "Processing", 2: "Failed", 3: "Completed" };
+                    const statusLabels: Record<number, string> = { 0: "待处理", 1: "处理中", 2: "失败", 3: "已完成" };
                     return statusLabels[agentDetail.profile_status] ?? String(agentDetail.profile_status);
                   })()
                 : "-"}
             </Descriptions.Item>
-            <Descriptions.Item label="Profile Keywords">
+            <Descriptions.Item label="资料关键词">
               {agentDetail.profile_keywords?.length > 0
                 ? agentDetail.profile_keywords.map((kw) => <Tag key={kw}>{kw}</Tag>)
                 : "-"}
             </Descriptions.Item>
-            <Descriptions.Item label="Created At">{formatTimestamp(agentDetail.created_at)}</Descriptions.Item>
-            <Descriptions.Item label="Updated At">{formatTimestamp(agentDetail.updated_at)}</Descriptions.Item>
+            <Descriptions.Item label="创建时间">{formatTimestamp(agentDetail.created_at)}</Descriptions.Item>
+            <Descriptions.Item label="更新时间">{formatTimestamp(agentDetail.updated_at)}</Descriptions.Item>
           </Descriptions>
         )}
       </Modal>

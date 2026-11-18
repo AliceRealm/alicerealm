@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const STORAGE_PREFIX = "eigenflux.console.page-state.";
+const STORAGE_PREFIX = "alicerealm.console.page-state.";
 
 const storageKey = (key: string) => `${STORAGE_PREFIX}${key}`;
 

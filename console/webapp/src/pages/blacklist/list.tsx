@@ -56,13 +56,13 @@ export const BlacklistKeywordList = () => {
         { enabled: checked }
       );
       if (data.code !== 0) {
-        messageApi.error(data.msg || "Update failed");
+        messageApi.error(data.msg || "更新失败");
         return;
       }
-      messageApi.success("Updated");
+      messageApi.success("已更新");
       await query.refetch();
     } catch {
-      messageApi.error("Update failed");
+      messageApi.error("更新失败");
     }
   };
 
@@ -75,15 +75,15 @@ export const BlacklistKeywordList = () => {
         { keyword: values.keyword.trim() }
       );
       if (data.code !== 0) {
-        messageApi.error(data.msg || "Create failed");
+        messageApi.error(data.msg || "创建失败");
         return;
       }
-      messageApi.success("Created");
+      messageApi.success("已创建");
       setCreateOpen(false);
       createForm.resetFields();
       await query.refetch();
     } catch {
-      messageApi.error("Create failed");
+      messageApi.error("创建失败");
     } finally {
       setSubmitting(false);
     }
@@ -95,13 +95,13 @@ export const BlacklistKeywordList = () => {
         `${consoleApiUrl}/blacklist-keywords/${keywordId}`
       );
       if (data.code !== 0) {
-        messageApi.error(data.msg || "Delete failed");
+        messageApi.error(data.msg || "删除失败");
         return;
       }
-      messageApi.success("Deleted");
+      messageApi.success("已删除");
       await query.refetch();
     } catch {
-      messageApi.error("Delete failed");
+      messageApi.error("删除失败");
     }
   };
 
@@ -115,16 +115,16 @@ export const BlacklistKeywordList = () => {
               type="primary"
               onClick={() => setCreateOpen(true)}
             >
-              Add Keyword
+              添加关键词
             </Button>
             <Select
-              placeholder="Filter by status"
+              placeholder="按状态筛选"
               allowClear
               style={{ width: 160 }}
               value={enabledFilter}
               options={[
-                { label: "Enabled", value: true },
-                { label: "Disabled", value: false },
+                { label: "已启用", value: true },
+                { label: "已停用", value: false },
               ]}
               onChange={(val) => {
                 setEnabledFilter(val);
@@ -148,13 +148,13 @@ export const BlacklistKeywordList = () => {
             },
             showSizeChanger: true,
             pageSizeOptions: [10, 20, 50, 100],
-            showTotal: (total) => `Total ${total}`,
+            showTotal: (total) => `共 ${total} 条`,
           }}
         >
-          <Table.Column title="Keyword ID" dataIndex="keyword_id" width={120} />
-          <Table.Column title="Keyword" dataIndex="keyword" />
+          <Table.Column title="关键词 ID" dataIndex="keyword_id" width={120} />
+          <Table.Column title="关键词" dataIndex="keyword" />
           <Table.Column
-            title="Enabled"
+            title="启用状态"
             dataIndex="enabled"
             width={100}
             render={(val: boolean, record: BlacklistKeyword) => (
@@ -165,20 +165,20 @@ export const BlacklistKeywordList = () => {
             )}
           />
           <Table.Column
-            title="Created At"
+            title="创建时间"
             dataIndex="created_at"
             width={180}
             render={(val: number) => (val ? new Date(val).toLocaleString() : "-")}
           />
           <Table.Column
-            title="Actions"
+            title="操作"
             width={100}
             render={(_: unknown, record: BlacklistKeyword) => (
               <Popconfirm
-                title="Delete this keyword?"
+                title="确定删除这个关键词吗？"
                 onConfirm={() => void handleDelete(record.keyword_id)}
               >
-                <Button type="link" danger>Delete</Button>
+                <Button type="link" danger>删除</Button>
               </Popconfirm>
             )}
           />
@@ -186,7 +186,7 @@ export const BlacklistKeywordList = () => {
       </List>
 
       <Modal
-        title="Add Blacklist Keyword"
+        title="添加黑名单关键词"
         open={createOpen}
         onCancel={() => {
           setCreateOpen(false);
@@ -199,10 +199,10 @@ export const BlacklistKeywordList = () => {
         <Form form={createForm} layout="vertical">
           <Form.Item
             name="keyword"
-            label="Keyword"
-            rules={[{ required: true, message: "Please enter a keyword" }]}
+            label="关键词"
+            rules={[{ required: true, message: "请输入关键词" }]}
           >
-            <Input placeholder="Enter keyword to blacklist" />
+            <Input placeholder="输入要加入黑名单的关键词" />
           </Form.Item>
         </Form>
       </Modal>

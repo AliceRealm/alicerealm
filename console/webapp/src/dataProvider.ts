@@ -38,7 +38,7 @@ export const consoleDataProvider = (
 
     // Check for API error response
     if (data.code !== 0 || !data.data) {
-      throw new Error(data.msg || "API request failed");
+      throw new Error(data.msg || "API 请求失败");
     }
 
     // Transform response to Refine format
@@ -68,7 +68,7 @@ export const consoleDataProvider = (
     const url = `${apiUrl}/${resource}/${id}`;
     const { data } = await httpClient.get(url);
     if (data.code !== 0 || !data.data) {
-      throw new Error(data.msg || "API request failed");
+      throw new Error(data.msg || "API 请求失败");
     }
     const inner = data.data;
     const singular: Record<string, string> = {
@@ -92,7 +92,7 @@ export const consoleDataProvider = (
     const url = `${apiUrl}/${resource}/${id}`;
     const { data } = await httpClient.put(url, variables);
     if (data.code !== 0) {
-      throw new Error(data.msg || "Update failed");
+      throw new Error(data.msg || "更新失败");
     }
     return { data: data.data };
   },
@@ -105,7 +105,7 @@ export const consoleDataProvider = (
 
   custom: async ({ url, method, query }) => {
     const { data } = await httpClient.request({ url, method, params: query });
-    if (data.code !== 0 || !data.data) throw new Error(data.msg || "API request failed");
+    if (data.code !== 0 || !data.data) throw new Error(data.msg || "API 请求失败");
     return { data: data.data };
   },
 

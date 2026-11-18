@@ -57,7 +57,7 @@ tailscale serve --bg http://127.0.0.1:10987
 tailscale serve status
 ```
 
-Open the HTTPS URL reported by `tailscale serve status`. `Caddyfile.private` binds only to loopback; Tailscale is the sole remote entry point. Do not expose ports 8090 or 10987 through a public firewall rule. Host deployment remains subject to `/etc/eigenflux/DEPLOYMENT_POLICY.md` and the repository's normal review and merge workflow.
+Open the HTTPS URL reported by `tailscale serve status`. `Caddyfile.private` binds only to loopback; Tailscale is the sole remote entry point. Do not expose ports 8090 or 10987 through a public firewall rule. Host deployment remains subject to `/etc/alicerealm/DEPLOYMENT_POLICY.md` and the repository's normal review and merge workflow.
 
 ## Tech Stack
 

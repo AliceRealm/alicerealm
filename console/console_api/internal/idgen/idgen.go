@@ -125,7 +125,7 @@ func NewManagedGenerator(ctx context.Context, cfg ManagedGeneratorConfig) (*Mana
 		return nil, errors.New("empty etcd endpoints")
 	}
 	if strings.TrimSpace(cfg.WorkerPrefix) == "" {
-		cfg.WorkerPrefix = "/eigenflux/idgen/workers"
+		cfg.WorkerPrefix = "/alicerealm/idgen/workers"
 	}
 	if strings.TrimSpace(cfg.ServiceName) == "" {
 		return nil, errors.New("empty service name")

@@ -52,7 +52,7 @@ const LongText = ({ text, maxWidth = 240 }: { text: string | null; maxWidth?: nu
   return (
     <Typography.Paragraph
       copyable={{ tooltips: false }}
-      ellipsis={{ rows: 5, expandable: true, symbol: "more" }}
+      ellipsis={{ rows: 5, expandable: true, symbol: "展开" }}
       style={{ marginBottom: 0, maxWidth, whiteSpace: "pre-wrap" }}
     >
       {text}
@@ -77,7 +77,7 @@ export const ImprRecordList = () => {
 
   const queryAgent = useCallback(async (agentID: string) => {
     if (!/^[1-9]\d*$/.test(agentID)) {
-      setErrorMsg("Please enter a valid agent_id");
+      setErrorMsg("请输入有效的智能体 ID");
       setData(null);
       return;
     }
@@ -91,7 +91,7 @@ export const ImprRecordList = () => {
       });
 
       if (resp.data.code !== 0 || !resp.data.data) {
-        throw new Error(resp.data.msg || "query failed");
+        throw new Error(resp.data.msg || "查询失败");
       }
 
       setData(resp.data.data);
@@ -102,7 +102,7 @@ export const ImprRecordList = () => {
       } else if (err instanceof Error) {
         setErrorMsg(err.message);
       } else {
-        setErrorMsg("Query failed");
+        setErrorMsg("查询失败");
       }
     } finally {
       setLoading(false);
@@ -123,48 +123,48 @@ export const ImprRecordList = () => {
 
   const columns: ColumnsType<Item> = [
     {
-      title: "Item ID",
+      title: "内容 ID",
       dataIndex: "item_id",
       key: "item_id",
       width: 100,
       fixed: "left",
     },
     {
-      title: "Author",
+      title: "作者",
       dataIndex: "author_agent_id",
       key: "author_agent_id",
       width: 100,
     },
     {
-      title: "Raw Content",
+      title: "原始内容",
       dataIndex: "raw_content",
       key: "raw_content",
       width: 260,
       render: (text: string) => <LongText text={text} maxWidth={260} />,
     },
     {
-      title: "Summary",
+      title: "摘要",
       dataIndex: "summary",
       key: "summary",
       width: 240,
       render: (text: string | null) => <LongText text={text} maxWidth={240} />,
     },
     {
-      title: "Status",
+      title: "状态",
       dataIndex: "status",
       key: "status",
       width: 100,
       render: (status: number) => <Tag>{status}</Tag>,
     },
     {
-      title: "Group ID",
+      title: "分组 ID",
       dataIndex: "group_id",
       key: "group_id",
       width: 120,
       render: (id: string | null) => id || "-",
     },
     {
-      title: "Updated At",
+      title: "更新时间",
       dataIndex: "updated_at",
       key: "updated_at",
       width: 180,
@@ -177,7 +177,7 @@ export const ImprRecordList = () => {
       headerButtons={(
         <Space>
           <Input
-            placeholder="Agent ID"
+            placeholder="智能体 ID"
             value={inputAgentID}
             inputMode="numeric"
             onChange={(event) => setInputAgentID(event.target.value)}
@@ -185,11 +185,11 @@ export const ImprRecordList = () => {
             style={{ width: 180 }}
           />
           <Button type="primary" loading={loading} onClick={() => void query()}>
-            Search
+            查询
           </Button>
         </Space>
       )}
-      title="Impr Records"
+      title="推荐记录"
     >
       {errorMsg && (
         <Alert
@@ -203,15 +203,15 @@ export const ImprRecordList = () => {
       {data && (
         <>
           <Space direction="vertical" style={{ width: "100%", marginBottom: 16 }}>
-            <Typography.Text>Agent ID: {data.agent_id}</Typography.Text>
+            <Typography.Text>智能体 ID：{data.agent_id}</Typography.Text>
             <Typography.Text>
-              item_ids: {data.item_ids.length > 0 ? data.item_ids.join(", ") : "-"}
+              内容 ID：{data.item_ids.length > 0 ? data.item_ids.join(", ") : "-"}
             </Typography.Text>
             <Typography.Text>
-              group_ids: {data.group_ids.length > 0 ? data.group_ids.join(", ") : "-"}
+              分组 ID：{data.group_ids.length > 0 ? data.group_ids.join(", ") : "-"}
             </Typography.Text>
             <Typography.Text>
-              urls: {data.urls.length > 0 ? data.urls.join(", ") : "-"}
+              链接：{data.urls.length > 0 ? data.urls.join(", ") : "-"}
             </Typography.Text>
           </Space>
 

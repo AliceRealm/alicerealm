@@ -7,10 +7,10 @@ export const ITEM_STATUS_DISCARDED = 4;
 export const ITEM_STATUS_DELETED = 5;
 
 export const itemStatusMap: Record<number, { label: string; color: string }> = {
-  [ITEM_STATUS_PENDING]: { label: "Pending", color: "default" },
-  [ITEM_STATUS_PROCESSING]: { label: "Processing", color: "processing" },
-  [ITEM_STATUS_FAILED]: { label: "Failed", color: "error" },
-  [ITEM_STATUS_COMPLETED]: { label: "Completed", color: "success" },
-  [ITEM_STATUS_DISCARDED]: { label: "Discarded", color: "warning" },
-  [ITEM_STATUS_DELETED]: { label: "Deleted", color: "default" },
+  [ITEM_STATUS_PENDING]: { label: "待处理", color: "default" },
+  [ITEM_STATUS_PROCESSING]: { label: "处理中", color: "processing" },
+  [ITEM_STATUS_FAILED]: { label: "失败", color: "error" },
+  [ITEM_STATUS_COMPLETED]: { label: "已完成", color: "success" },
+  [ITEM_STATUS_DISCARDED]: { label: "已丢弃", color: "warning" },
+  [ITEM_STATUS_DELETED]: { label: "已删除", color: "default" },
 };

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -16,6 +17,7 @@ type Config struct {
 	RedisPassword        string
 	EtcdAddr             string
 	ConsoleApiPort       int
+	ServiceBindAddress   string
 	CommissionRPCPort    int
 	IDWorkerPrefix       string
 	IDSnowflakeEpoch     int64
@@ -35,13 +37,14 @@ func Load() *Config {
 	etcdPort := getEnv("ETCD_PORT", "2379")
 
 	return &Config{
-		PgDSN:                getEnv("PG_DSN", "postgres://eigenflux:eigenflux123@localhost:"+postgresPort+"/eigenflux?sslmode=disable"),
+		PgDSN:                getEnv("PG_DSN", "postgres://alicerealm:alicerealm123@localhost:"+postgresPort+"/alicerealm?sslmode=disable"),
 		RedisAddr:            getEnv("REDIS_ADDR", "localhost:"+redisPort),
 		RedisPassword:        getEnv("REDIS_PASSWORD", ""),
 		EtcdAddr:             getEnv("ETCD_ADDR", "localhost:"+etcdPort),
 		ConsoleApiPort:       getEnvInt("CONSOLE_API_PORT", 8090),
+		ServiceBindAddress:   getEnv("SERVICE_BIND_ADDRESS", ""),
 		CommissionRPCPort:    getEnvInt("COMMISSION_RPC_PORT", 8889),
-		IDWorkerPrefix:       getEnv("ID_WORKER_PREFIX", "/eigenflux/idgen/workers"),
+		IDWorkerPrefix:       getEnv("ID_WORKER_PREFIX", "/alicerealm/idgen/workers"),
 		IDSnowflakeEpoch:     getEnvInt64("ID_SNOWFLAKE_EPOCH_MS", 1704067200000),
 		IDWorkerLeaseTTL:     getEnvInt("ID_WORKER_LEASE_TTL", 30),
 		IDInstanceID:         getEnv("ID_INSTANCE_ID", ""),
@@ -53,6 +56,9 @@ func Load() *Config {
 }
 
 func (c *Config) ListenAddr() string {
+	if strings.TrimSpace(c.ServiceBindAddress) != "" {
+		return net.JoinHostPort(strings.TrimSpace(c.ServiceBindAddress), strconv.Itoa(c.ConsoleApiPort))
+	}
 	return fmt.Sprintf(":%d", c.ConsoleApiPort)
 }
 

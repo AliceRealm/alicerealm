@@ -112,16 +112,24 @@ function Download-WithRetry {
     }
 }
 
-# Only HTTP 404 permits fallback to the legacy bridge release channel.
-function Get-LatestCliVersion {
+# Windows may advance independently while the cross-platform channel waits for
+# a notarized macOS package. Only HTTP 404 permits fallback between channels.
+function Get-VersionPointer {
+    param([Parameter(Mandatory = $true)][string]$Path)
     try {
-        $value = (Invoke-RestMethod -Uri "${CdnUrl}/cli/v2/latest/version.txt" -TimeoutSec 30).Trim()
+        return (Invoke-RestMethod -Uri "${CdnUrl}${Path}" -TimeoutSec 30).Trim()
     } catch {
-        if ($null -eq $_.Exception.Response -or [int]$_.Exception.Response.StatusCode -ne 404) {
-            throw
+        if ($null -ne $_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 404) {
+            return $null
         }
-        $value = (Invoke-RestMethod -Uri "${CdnUrl}/cli/latest/version.txt" -TimeoutSec 30).Trim()
+        throw
     }
+}
+
+function Get-LatestCliVersion {
+    $value = Get-VersionPointer -Path "/cli/windows/latest/version.txt"
+    if ($null -eq $value) { $value = Get-VersionPointer -Path "/cli/v2/latest/version.txt" }
+    if ($null -eq $value) { $value = (Invoke-RestMethod -Uri "${CdnUrl}/cli/latest/version.txt" -TimeoutSec 30).Trim() }
     if ($value -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
         throw 'Invalid published CLI version'
     }

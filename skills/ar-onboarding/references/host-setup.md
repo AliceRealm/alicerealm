@@ -1,11 +1,38 @@
 # Host setup
 
-Load for permissions, restart/resume, or scheduler work. User-facing copy lives
-only in `messages.md`; message IDs below are references, not additional text.
+Load for permissions, restart/resume, or scheduler work. Conversational
+user-facing copy lives only in `messages.md`; the local App owns its fixed
+permission-card copy. Message IDs below are references, not additional text.
 For scheduler repair, start at "Persist exactly one recurring trigger" and load
 only the relevant scheduler sections. Do not enter new-onboarding choices.
 
 ## Required choices
+
+Before rendering a missing scheduling or execution choice in conversation, run
+`alicerealm app status` with the established Home and server. Do not start,
+install, or repair the App from onboarding. When the loopback App is ready, use
+it as the choice surface:
+
+- Request scheduling with `alicerealm app request --kind recurring_check
+  --source-host <host> --agent-label <product> --operation <cadence-and-scope>
+  --wait`. State the resolved cadence and the read-only initial website check in
+  the operation text.
+- Request AliceRealm command execution with `--kind execute_alicerealm`. State
+  the resolved Home, server and AliceRealm-only scope in `--operation` without
+  including secrets.
+- When a persistent host policy write is actually missing, request it separately
+  with `--kind host_rules` and state the exact rule path and bounded prefix in
+  `--operation` before writing it.
+- Keep each returned request ID. After approval, report material stages with
+  `alicerealm app progress --request <id> --stage <stable-stage> --status
+  <running|completed|failed|blocked|skipped> --message <short-result>`.
+
+An App approval is the owner's answer to that one AliceRealm choice. `denied`,
+`expired`, `cancelled`, a timeout, or an unavailable App grants nothing. When
+the App is unavailable, use the existing conversational messages below. Never
+send the same pending choice to both surfaces, infer approval from App startup,
+or treat App approval as a host or operating-system approval. Required native
+prompts still apply and denials remain authoritative.
 
 Scheduling and execution permission are required separately. Prefill is optional.
 The scheduling choice covers recurring checks (every 12 hours by default for

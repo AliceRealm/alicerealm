@@ -25,7 +25,9 @@ export default defineConfig(({ mode }) => {
         },
       },
       allowedHosts: [
-        'alicerealm.com'
+        'alicerealm.com',
+        'www.alicerealm.com',
+        'console.alicerealm.com'
       ]
     },
   }
