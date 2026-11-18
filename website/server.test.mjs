@@ -17,8 +17,12 @@ test.before(async () => {
   releaseRoot = await mkdtemp(join(tmpdir(), 'alicerealm-updates-'));
   await mkdir(join(releaseRoot, 'cli', '1.0.30'), { recursive: true });
   await mkdir(join(releaseRoot, 'cli', 'latest'), { recursive: true });
+  await mkdir(join(releaseRoot, 'app', 'windows', '0.1.0'), { recursive: true });
+  await mkdir(join(releaseRoot, 'app', 'windows', 'latest'), { recursive: true });
   await writeFile(join(releaseRoot, 'cli', '1.0.30', 'alicerealm-linux-amd64'), 'binary');
   await writeFile(join(releaseRoot, 'cli', 'latest', 'version.txt'), '1.0.30\n');
+  await writeFile(join(releaseRoot, 'app', 'windows', '0.1.0', 'alicerealm-app-windows-x64.zip'), 'app bundle');
+  await writeFile(join(releaseRoot, 'app', 'windows', 'latest', 'version.txt'), '0.1.0\n');
   api = http.createServer(async (request, response) => {
     const chunks = [];
     for await (const chunk of request) chunks.push(chunk);
@@ -99,4 +103,14 @@ test('serves mutable and immutable update artifacts with safe caching', async ()
 
   const traversal = await fetch(`http://127.0.0.1:${port}/cli/latest/not-present`);
   assert.equal(traversal.status, 404);
+
+  const appPointer = await fetch(`http://127.0.0.1:${port}/app/windows/latest/version.txt`);
+  assert.equal(appPointer.status, 200);
+  assert.equal(await appPointer.text(), '0.1.0\n');
+  assert.equal(appPointer.headers.get('cache-control'), 'no-store');
+
+  const appBundle = await fetch(`http://127.0.0.1:${port}/app/windows/0.1.0/alicerealm-app-windows-x64.zip`);
+  assert.equal(appBundle.status, 200);
+  assert.equal(await appBundle.text(), 'app bundle');
+  assert.match(appBundle.headers.get('cache-control'), /immutable/);
 });

@@ -73,7 +73,7 @@ function resolveAsset(pathname) {
 }
 
 function resolveReleaseAsset(pathname) {
-  if (!pathname.startsWith('/cli/') && !pathname.startsWith('/skills/') && !pathname.startsWith('/installers/')) return null;
+  if (!pathname.startsWith('/cli/') && !pathname.startsWith('/skills/') && !pathname.startsWith('/app/') && !pathname.startsWith('/installers/')) return null;
   const safePath = normalize(pathname.replace(/^\/+/, '')).replace(/^(\.\.(\/|\\|$))+/, '');
   const candidate = join(releaseRoot, safePath);
   if (!candidate.startsWith(releaseRoot) || !existsSync(candidate) || !statSync(candidate).isFile()) return null;
@@ -106,7 +106,7 @@ const server = http.createServer((request, response) => {
 
   const releaseAsset = resolveReleaseAsset(url.pathname);
   if (releaseAsset) {
-    const immutable = /^\/cli\/\d+\.\d+\.\d+\//.test(url.pathname);
+    const immutable = /^\/(cli|app\/windows)\/\d+\.\d+\.\d+\//.test(url.pathname);
     response.writeHead(200, {
       'Content-Type': contentTypes.get(extname(releaseAsset).toLowerCase()) || 'application/octet-stream',
       'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : 'no-store',

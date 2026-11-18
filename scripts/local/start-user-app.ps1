@@ -11,6 +11,8 @@ $server = Join-Path $repoRoot "app\server.mjs"
 if (-not (Test-Path -LiteralPath $server -PathType Leaf)) {
     throw "AliceRealm App server is missing: $server"
 }
+$bundledNode = Join-Path $repoRoot "runtime\node.exe"
+$node = if (Test-Path -LiteralPath $bundledNode -PathType Leaf) { $bundledNode } else { "node" }
 
 if ([string]::IsNullOrWhiteSpace($AgentHome)) {
     if (-not [string]::IsNullOrWhiteSpace($env:ALICEREALM_HOME)) {
@@ -56,7 +58,7 @@ if ([string]::IsNullOrWhiteSpace($env:ALICEREALM_API_ORIGIN)) {
 
 $stdout = Join-Path $appStateDir "server.stdout.log"
 $stderr = Join-Path $appStateDir "server.stderr.log"
-$process = Start-Process -FilePath "node" -ArgumentList @($server) -WorkingDirectory $repoRoot -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+$process = Start-Process -FilePath $node -ArgumentList @($server) -WorkingDirectory $repoRoot -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
 
 $deadline = (Get-Date).AddSeconds(12)
 $state = $null

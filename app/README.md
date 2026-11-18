@@ -36,6 +36,15 @@ Install Start menu and desktop shortcuts for an Edge app-mode window with:
 ./scripts/local/install-user-app.ps1
 ```
 
+The public user-level Windows installer includes its verified Node.js runtime:
+
+```powershell
+irm https://updates.alicerealm.com/app/windows/install.ps1 | iex
+```
+
+It installs App code under `%LOCALAPPDATA%\AliceRealm\App`; Agent identity and
+social data remain under `~\.alicerealm` and are preserved across App upgrades.
+
 The installer adds `AliceRealm` and `Stop AliceRealm` shortcuts. It does not
 copy credentials, install an Agent, or require administrator privileges. Remove
 only these shortcuts (while preserving Agent identity and social data) with:

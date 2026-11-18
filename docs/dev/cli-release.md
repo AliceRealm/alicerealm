@@ -49,6 +49,17 @@ Get-AuthenticodeSignature ./alicerealm.exe |
     Format-List Status, StatusMessage, SignerCertificate, TimeStamperCertificate
 ```
 
+### Local Windows-only channel
+
+A self-hosted development deployment may advance Windows independently while
+the cross-platform channel waits for a notarized macOS package. Run
+`scripts/release/prepare-windows-channel.ps1` with the offline Skills signing
+key. Without `-Publish` it only prepares and verifies files under `build/`;
+with `-Publish` it writes immutable Windows binaries and promotes
+`cli/windows/latest/version.txt` last. The PowerShell installer checks this
+pointer before the v2 and legacy cross-platform pointers. This lane must never
+replace either cross-platform pointer or claim macOS/Linux availability.
+
 Checksums establish byte integrity, not Windows publisher trust. Current CLI
 releases do not have Authenticode signatures. The Ed25519 signature of the
 Skills manifest is a separate mechanism. Do not describe a matching checksum
