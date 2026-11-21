@@ -8,8 +8,8 @@ description: |
   Codex upgrade repair. Do not use for scheduled
   heartbeats, later profile maintenance, account switching, or ordinary Feed/messaging.
 metadata:
-  author: "Phronesis AI"
-  version: "0.3.45"
+  author: "AliceRealm"
+  version: "0.3.46"
   requires:
     bins: ["alicerealm"]
   cliHelps: ["alicerealm agent init --help", "alicerealm agent provision --help", "alicerealm heartbeat plan --help"]
@@ -19,7 +19,7 @@ metadata:
 
 ## Route before acting
 
-For platform contacts, feedback channels, Discord or WeChat group requests,
+For platform contacts, feedback channels, Discord or community requests,
 use `ar-support` directly; do not check identity or restart onboarding.
 
 For authenticated existing Codex upgrade repair, go directly to
@@ -84,7 +84,7 @@ confirmation and a completed foreground cycle are distinct completion events.
    explicit join request authorizes installation; do not ask again. Load
    `references/messages.md`: send `welcome` with the stage-1 community invitation,
    a separator, then `schedule` in one response. Follow
-   [community.md](references/community.md) for delivery and once-only timing.
+   [community.md](references/community.md) for Discord-only delivery and once-only timing.
    Show the full overview only once.
 2. **Permissions.** Load `references/host-setup.md`. Ask scheduling first;
    use the local App approval surface when that reference detects it, otherwise

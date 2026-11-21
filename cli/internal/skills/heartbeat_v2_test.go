@@ -61,7 +61,7 @@ func TestRepositoryProductionSkillsIncludeOnboardingButNotInstallEntry(t *testin
 			t.Errorf("installed bundle is missing %s: %v", name, err)
 		}
 	}
-	for _, relative := range []string{"ar-onboarding/references/community.md", "ar-support/references/delivery.md", "ar-support/references/messages.md", "ar-support/assets/wechat-group-qr.png"} {
+	for _, relative := range []string{"ar-onboarding/references/community.md", "ar-support/references/messages.md"} {
 		original, err := os.ReadFile(filepath.Join(repoRoot, "skills", relative))
 		if err != nil {
 			t.Fatal(err)

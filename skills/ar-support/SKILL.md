@@ -1,14 +1,14 @@
 ---
 name: ar-support
 description: |
-  Provide AliceRealm platform feedback and community contact channels: Discord and WeChat group QR.
+  Provide AliceRealm platform feedback and community contact through Discord.
   Use when the user asks how to contact the platform, get support, report a bug, give feedback,
-  or join its community (怎么联系平台、联系客服、反馈问题、反馈群、Discord、微信群), including
+  or join its community (怎么联系平台、联系客服、反馈问题、反馈群、Discord), including
   after account troubleshooting or completed onboarding. These are human platform channels,
   not messages to another network Agent. Do not use for unrelated services or account mutations.
 metadata:
-  author: "Phronesis AI"
-  version: "0.1.9"
+  author: "AliceRealm"
+  version: "0.1.10"
 ---
 
 # AliceRealm Platform Support
@@ -24,24 +24,23 @@ Use the maintained channels directly for routine contact requests; no inbox sear
 An official network Agent label does not establish human support availability,
 account access, or account-change capabilities.
 
-Offer both maintained channels unless the user asks for a specific one:
+The maintained community channel is Discord:
 
 - Discord: https://discord.gg/MWFr98Pbe — platform feedback and community discussion.
-- WeChat: the bundled `assets/wechat-group-qr.png`, delivered using
-  [delivery.md](references/delivery.md). Resolve it relative to this installed
-  Skill, never from the current workspace or another Agent Home.
+
+AliceRealm does not maintain a WeChat group. If the user specifically asks for
+WeChat, say it is not available and offer Discord instead. Never reuse or expose
+legacy EigenFlux QR codes or community links.
 
 Keep the homepage navigation below as reference knowledge. For routine contact
-requests, deliver the maintained Discord link and/or QR directly without a
+requests, deliver the maintained Discord link directly without a
 homepage visit or navigation instructions. Use this reference when the user asks
 where to find contacts on the website or specifically requests email.
 
 For website contact or email requests, open https://alicerealm.com/ and locate
 the icon row in the upper-left header, immediately to the right of the AliceRealm
-logo. The Chinese homepage shows GitHub, WeChat and envelope icons; the English
-homepage shows GitHub, X, Discord and envelope icons. Use the WeChat icon on the
-Chinese page or the Discord icon on the English page for the community; both
-versions have the envelope email entry. Follow the actual page language, not
+logo. Use the Discord entry for the community and the envelope entry for email.
+Follow the actual page language, not
 just the conversation language. Inspect the rendered header and the actual link targets; icon-only links
 may be missing from a text-only page extract. Use the envelope's actual target
 for email requests. Opening or inspecting an entry does not authorize sending.
@@ -49,16 +48,14 @@ The onboarding policy states that the operations team replies within one busines
 day; quote that policy only for contacting the operations team, not as a promise
 about every community member or a guaranteed resolution time.
 
-For example, answer "How do I contact the platform?" with a direct Discord link
-and the WeChat QR via the host-appropriate delivery route. Use concise wording
-such as "You can contact the platform and share feedback through Discord or our
-WeChat group," localized to the user's language. Do not substitute a searched
+For example, answer "How do I contact the platform?" with the direct Discord link.
+Use concise wording such as "You can contact the platform and share feedback
+through Discord," localized to the user's language. Do not substitute a searched
 email address for these maintained channels. If a particular contact method is
 requested but not listed here, say it is not recorded here rather than inventing it.
-For a general contact request, provide Discord even if the QR is unavailable.
-For a WeChat-only request with unavailable QR delivery, explain that limitation
-and offer Discord as an alternative; do not imply that WeChat was delivered.
-For a Discord-only request, skip QR resolution and file tools entirely.
+For a general contact request, provide Discord. For a WeChat-only request,
+explain that AliceRealm does not maintain a WeChat group and offer Discord as an
+alternative. Do not resolve, attach, or display any QR image.
 
 When recommending platform support during troubleshooting, include these
 concrete channels instead of saying only “contact support.” Do not claim that
@@ -72,6 +69,6 @@ on the user's behalf. The user chooses whether and what to share.
 
 `ar-onboarding` owns when its once-only verified-installation welcome
 invitation is eligible. Reuse [messages.md](references/messages.md) and the same
-[delivery.md](references/delivery.md) there. Do not proactively repeat invitations
+Discord-only channel there. Do not proactively repeat invitations
 in scheduled tasks or unrelated replies. Explicit contact requests above remain
 available at any time and do not require a first check.
