@@ -134,16 +134,13 @@ openers and non-confirming results retain the link. The instruction contract
 test protects the exact URL and bounded visibility attempt.
 Native WorkBuddy behavior and authenticated external handoff require host acceptance.
 
-WorkBuddy uses a maintained immutable HTTPS QR image inline after the invitation
-and before the scheduling question. It does not call present_files on this path.
-The bundled native-attachment route remains a fallback for known loading failure
-or an explicit user report; do not deliver both forms preemptively. Source URL
-and fallback details are owned by ar-support/references/delivery.md. Other hosts
-retain their bundled-image delivery. Once-only welcome timing and explicit
-repeatable support requests remain unchanged.
+Every host renders the same localized Discord-only invitation before the
+scheduling question. No WeChat QR code, image delivery or native attachment is
+involved. Once-only welcome timing and explicit repeatable support requests
+remain unchanged.
 
 Platform support channels are owned by the discoverable `ar-support` Skill,
-including the Discord URL, QR asset, localized invitation copy and host delivery.
+including the Discord URL and localized invitation copy.
 Onboarding delegates presentation while retaining its once-only automatic timing.
 Explicit support/contact/community requests work before, during and after setup,
 and may repeat delivery without an account command or first-check rerun.

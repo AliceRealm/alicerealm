@@ -200,11 +200,14 @@ func TestOnboardingCommunityInvitation(t *testing.T) {
 		}
 	}
 	messages := read("../ar-support/references/messages.md")
-	if strings.Count(messages, "https://discord.gg/MWFr98Pbe") != 6 {
-		t.Error("expected bilingual inline, attachment and Discord-only community links")
+	if strings.Count(messages, "https://discord.gg/MWFr98Pbe") != 2 {
+		t.Error("expected one bilingual Discord-only community link")
 	}
-	if !strings.HasPrefix(read("../ar-support/assets/wechat-group-qr.png"), "\x89PNG\r\n\x1a\n") {
-		t.Error("missing bundled PNG")
+	if strings.Contains(messages, "WeChat") || strings.Contains(messages, "微信") || strings.Contains(messages, "![") {
+		t.Error("installation community copy must not contain WeChat or an image")
+	}
+	if _, err := os.Stat("../../skills/ar-support/assets/wechat-group-qr.png"); !os.IsNotExist(err) {
+		t.Error("legacy WeChat QR asset must not ship")
 	}
 }
 
@@ -266,46 +269,28 @@ func TestWorkBuddyDirectPreviewContract(t *testing.T) {
 	}
 }
 
-func TestWorkBuddyCommunityAttachmentContract(t *testing.T) {
-	b, err := os.ReadFile("../../skills/ar-support/references/delivery.md")
+func TestDiscordOnlyCommunityContract(t *testing.T) {
+	for _, path := range []string{
+		"../../skills/ar-support/references/delivery.md",
+		"../../skills/ar-support/assets/wechat-group-qr.png",
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("legacy WeChat resource must not exist: %s", path)
+		}
+	}
+	b, err := os.ReadFile("../../skills/ar-support/references/messages.md")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, marker := range []string{"https://raw.githubusercontent.com/AliceRealm/alicerealm/", "immediately after the invitation text", "Do not call `present_files`", "Do not deliver both forms preemptively", "final scheduling question remains last"} {
-		if !strings.Contains(string(b), marker) {
-			t.Errorf("missing inline QR boundary: %s", marker)
+	copy := string(b)
+	for _, marker := range []string{"community_invite", "https://discord.gg/MWFr98Pbe", "### zh", "### en"} {
+		if !strings.Contains(copy, marker) {
+			t.Errorf("missing Discord-only community marker: %s", marker)
 		}
 	}
-	section := strings.SplitN(string(b), "In WorkBuddy, deliver the QR", 2)
-	if len(section) != 2 {
-		t.Fatal("missing native QR delivery route")
-	}
-	for _, phrase := range []string{"fresh file", "`outputs/`", "do not overwrite", "SHA-256", "`present_files` once", "that exact path in `files`", "do not add a raw local Markdown image or file link", "`community_invite_discord`", "without retrying or blocking onboarding", "For other hosts, use `community_invite`"} {
-		if !strings.Contains(section[1], phrase) {
-			t.Errorf("missing QR contract: %s", phrase)
-		}
-	}
-	b, err = os.ReadFile("../../skills/ar-support/references/messages.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, id := range []string{"community_invite_attachment", "community_invite_discord"} {
-		match := regexp.MustCompile(`(?s)\n## ` + id + `\n(.*?)(?:\n## |$)`).FindStringSubmatch(strings.ReplaceAll(string(b), "\r\n", "\n"))
-		if match == nil {
-			t.Fatalf("missing %s", id)
-		}
-		for _, locale := range []string{"zh", "en"} {
-			parts := strings.SplitN(match[1], "### "+locale+"\n", 2)
-			if len(parts) != 2 {
-				t.Fatalf("missing %s/%s", id, locale)
-			}
-			body := strings.SplitN(parts[1], "\n### ", 2)[0]
-			if !strings.Contains(body, "https://discord.gg/MWFr98Pbe") || strings.Contains(body, "![") || strings.Contains(body, "<wechat-qr-path>") {
-				t.Errorf("invalid native/fallback copy %s/%s", id, locale)
-			}
-			if id == "community_invite_discord" && (strings.Contains(body, "微信") || strings.Contains(body, "WeChat")) {
-				t.Errorf("failed delivery must not promise QR: %s", locale)
-			}
+	for _, forbidden := range []string{"WeChat", "微信", "<wechat-qr-path>", "![", "community_invite_attachment", "community_invite_discord"} {
+		if strings.Contains(copy, forbidden) {
+			t.Errorf("Discord-only community copy contains %s", forbidden)
 		}
 	}
 }
@@ -323,7 +308,7 @@ func TestPlatformSupportRouting(t *testing.T) {
 		return string(b)
 	}
 	support := read("ar-support/SKILL.md")
-	for _, phrase := range []string{"怎么联系平台", "反馈问题", "微信群", "regardless", "No CLI calls", "new request is not suppressed", "Do not send messages", "unless the user asks for a specific one", "For a Discord-only request, skip QR resolution", "For a WeChat-only request"} {
+	for _, phrase := range []string{"怎么联系平台", "反馈问题", "Discord", "regardless", "No CLI calls", "new request is not suppressed", "Do not send messages", "does not maintain a WeChat group", "Do not resolve, attach, or display any QR image"} {
 		if !strings.Contains(support, phrase) {
 			t.Errorf("missing support routing boundary: %s", phrase)
 		}
@@ -336,8 +321,8 @@ func TestPlatformSupportRouting(t *testing.T) {
 	if strings.Contains(read("ar-onboarding/references/messages.md"), "https://discord.gg/") {
 		t.Error("onboarding must not duplicate the canonical support channel")
 	}
-	if _, err := os.Stat("../../skills/ar-onboarding/assets/wechat-group-qr.png"); !os.IsNotExist(err) {
-		t.Error("QR asset must have a single support owner")
+	if _, err := os.Stat("../../skills/ar-support/assets/wechat-group-qr.png"); !os.IsNotExist(err) {
+		t.Error("legacy support QR asset must not exist")
 	}
 }
 
@@ -370,7 +355,7 @@ func TestSupportPublicCopyConsistency(t *testing.T) {
 			}
 		}
 	}
-	for _, marker := range []string{"upper-left header", "envelope", "actual link targets", "one business", "Chinese homepage", "English", "Follow the actual page language"} {
+	for _, marker := range []string{"upper-left header", "envelope", "actual link targets", "one business", "Follow the actual page language"} {
 		if !strings.Contains(support, marker) {
 			t.Errorf("missing homepage contact guidance: %s", marker)
 		}

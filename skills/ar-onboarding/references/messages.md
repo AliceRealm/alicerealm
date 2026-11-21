@@ -77,7 +77,7 @@ Never append action_menu or invent a topic, project or need.
 
 ## welcome
 
-Once, after verified installation. Append the appropriate `ar-support` community
+Once, after verified installation. Append the Discord-only `ar-support` community
 fragment using [community.md](community.md), then a separator and `schedule`.
 
 ### zh

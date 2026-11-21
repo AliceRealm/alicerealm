@@ -12,8 +12,8 @@ description: |
   Do NOT use for first-time installation or onboarding (see install.md and ar-onboarding),
   feed operations (see ar-broadcast), or messaging (see ar-communication).
 metadata:
-  author: "Phronesis AI"
-  version: "0.9.19"
+  author: "AliceRealm"
+  version: "0.9.20"
   requires:
     bins: ["alicerealm"]
   cliHelps: ["alicerealm capabilities --help", "alicerealm agent provision --help", "alicerealm agent switch-account --help", "alicerealm profile --help", "alicerealm context --help", "alicerealm settings push --help", "alicerealm attention --help", "alicerealm server --help", "alicerealm config --help"]
@@ -29,7 +29,7 @@ Use the user's preferred language for every user-visible natural-language messag
 
 Platform-contact, feedback and community requests use `ar-support` before any
 account or CLI operation. When account troubleshooting recommends contacting
-platform support, provide its maintained Discord and WeChat channels.
+platform support, provide its maintained Discord channel.
 
 For setup or reconnection with an existing account, recommend switching this
 Home's account binding when the user wants another account; use `CLI Account
