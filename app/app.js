@@ -6,6 +6,11 @@ const state = {
   today: null,
   route: 'today',
   csrf: sessionStorage.getItem('alicerealm.csrf') || '',
+  onboarding: {
+    challenge: null,
+    draft: null,
+    limits: null,
+  },
   local: {
     available: false,
     uiToken: sessionStorage.getItem('alicerealm.local.ui_token') || '',
@@ -135,6 +140,7 @@ async function exchangeHandoff() {
   });
   state.csrf = data.csrf_token || '';
   if (state.csrf) sessionStorage.setItem('alicerealm.csrf', state.csrf);
+  sessionStorage.removeItem('alicerealm.onboarding.email_verified');
   history.replaceState({}, '', '/dashboard/today');
 }
 
@@ -407,11 +413,229 @@ async function renderSettings() {
   });
 }
 
+function onboardingEmailVerified() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem('alicerealm.onboarding.email_verified') || '{}');
+    return String(saved.agent_id || '') === String(state.session?.agent_id || '');
+  } catch (_) {
+    return false;
+  }
+}
+
+function onboardingProgress(active) {
+  const labels = ['邮箱认领', 'Agent Card', '网络目标', '意图规则', '安全边界'];
+  return `<ol class="onboarding-progress">${labels.map((label, index) => {
+    const step = index + 1;
+    const status = step < active ? 'done' : step === active ? 'active' : '';
+    return `<li class="${status}"><i>${step < active ? '✓' : step}</i><span>${label}</span></li>`;
+  }).join('')}</ol>`;
+}
+
+function onboardingShell(step, title, description, body) {
+  return `<section class="onboarding-flow">${onboardingProgress(step)}<div class="onboarding-panel"><header><span class="eyebrow">SETUP · ${step}/5</span><h2>${escapeHTML(title)}</h2><p>${escapeHTML(description)}</p></header>${body}</div></section>`;
+}
+
+function idempotencyKey(prefix) {
+  return `${prefix}-${crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+}
+
+function onboardingError(error) {
+  const messages = {
+    EMAIL_RATE_LIMITED: '验证码发送次数过多，请稍后再试。',
+    EMAIL_DELIVERY_UNAVAILABLE: '邮件服务暂时不可用，请稍后再试。',
+    EMAIL_DELIVERY_BUSY: '邮件队列繁忙，请稍后再试。',
+    OTP_INVALID: '验证码不正确或已过期，请检查后重试。',
+    REVISION_CONFLICT: '资料已在其他窗口更新，正在重新载入。',
+  };
+  return messages[error.code] || error.message || '操作失败，请稍后重试。';
+}
+
+function renderEmailOnboarding() {
+  const challenge = state.onboarding.challenge;
+  const defaultEmail = challenge?.email || state.session.email || '';
+  const body = challenge ? `
+    <form id="email-verify-form" class="onboarding-form">
+      <label><span>验证码已发送至</span><input value="${escapeHTML(defaultEmail)}" disabled /></label>
+      <label><span>6 位验证码</span><input name="otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required autofocus placeholder="000000" /></label>
+      <p class="form-hint">验证码仅用于本次认领。请不要把验证码发给 Agent 或粘贴到聊天中。</p>
+      <div class="form-actions"><button id="email-change" type="button" class="secondary-button">更换邮箱</button><button type="submit" class="primary-button">验证并继续</button></div>
+    </form>` : `
+    <form id="email-challenge-form" class="onboarding-form">
+      <label><span>你的邮箱</span><input name="email" type="email" autocomplete="email" value="${escapeHTML(defaultEmail)}" required placeholder="you@example.com" /></label>
+      <p class="form-hint">此邮箱用于认领 Agent 和以后恢复账户。Agent 私钥仍只保存在你的设备上。</p>
+      <div class="form-actions"><button type="submit" class="primary-button">发送验证码</button></div>
+    </form>`;
+  $('#page-content').innerHTML = onboardingShell(1, '认领这个 Agent', `你正在认领 ${state.session.agent_name || '当前 Agent'}。先验证一个由你控制的邮箱。`, body);
+  $('#email-change')?.addEventListener('click', () => { state.onboarding.challenge = null; renderEmailOnboarding(); });
+  $('#email-challenge-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const button = $('button[type="submit"]', event.currentTarget);
+    button.disabled = true;
+    try {
+      const email = String(new FormData(event.currentTarget).get('email') || '').trim();
+      const result = await api('/api/v2/account-email-bindings/challenges', { method: 'POST', body: JSON.stringify({ email }) });
+      state.onboarding.challenge = { id: result.challenge_id, email, expires_at: result.expires_at };
+      renderEmailOnboarding();
+    } catch (error) {
+      button.disabled = false;
+      showToast(onboardingError(error));
+    }
+  });
+  $('#email-verify-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const button = $('button[type="submit"]', event.currentTarget);
+    button.disabled = true;
+    try {
+      const otp = String(new FormData(event.currentTarget).get('otp') || '').trim();
+      await api('/api/v2/account-email-bindings/verify', {
+        method: 'POST',
+        body: JSON.stringify({ challenge_id: challenge.id, email: challenge.email, otp }),
+      });
+      sessionStorage.setItem('alicerealm.onboarding.email_verified', JSON.stringify({ agent_id: state.session.agent_id }));
+      state.onboarding.challenge = null;
+      await loadSession();
+      await renderOnboarding();
+    } catch (error) {
+      button.disabled = false;
+      showToast(onboardingError(error));
+    }
+  });
+}
+
+function intentEditor(intent = {}, index = 0) {
+  return `<fieldset class="intent-editor" data-intent-index="${index}"><div class="intent-heading"><legend>规则 ${index + 1}</legend><button type="button" class="text-button" data-remove-intent>删除</button></div>
+    <label><span>关注什么</span><input name="watch_for" value="${escapeHTML(intent.watch_for || '')}" required placeholder="例如：AI Agent 基础设施合作机会" /></label>
+    <label><span>何时触发</span><input name="trigger_when" value="${escapeHTML(intent.trigger_when || '')}" placeholder="例如：来源可靠且与当前目标相关" /></label>
+    <label><span>Agent 应该做什么</span><textarea name="action_instruction" rows="3" placeholder="例如：分析内容并向我汇报">${escapeHTML(intent.action_instruction || '')}</textarea></label>
+    <div class="form-row"><label><span>行动级别</span><select name="action_policy">
+      <option value="analyze_only" ${intent.action_policy === 'analyze_only' ? 'selected' : ''}>只分析，不对外操作</option>
+      <option value="draft" ${intent.action_policy === 'draft' ? 'selected' : ''}>生成草稿，等待确认</option>
+      <option value="network_action" ${intent.action_policy === 'network_action' ? 'selected' : ''}>允许网络互动</option>
+      <option value="trade_action" ${intent.action_policy === 'trade_action' ? 'selected' : ''}>允许交易类操作</option>
+    </select></label><label><span>优先级</span><input name="priority" type="number" min="-32768" max="32767" value="${Number(intent.priority || 0)}" /></label></div>
+  </fieldset>`;
+}
+
+function collectIntentEditors(form) {
+  return $$('[data-intent-index]', form).map((field) => ({
+    watch_for: $('[name="watch_for"]', field).value.trim(),
+    trigger_when: $('[name="trigger_when"]', field).value.trim(),
+    action_instruction: $('[name="action_instruction"]', field).value.trim(),
+    action_policy: $('[name="action_policy"]', field).value,
+    priority: Number($('[name="priority"]', field).value || 0),
+  }));
+}
+
+function buildOnboardingStep(step, draft) {
+  const identity = draft.identity_card || {};
+  const security = draft.security_boundary || {};
+  if (step === 2) return {
+    title: '确认 Agent Card',
+    description: 'Agent 已经帮你预填资料。请确认名称和公开介绍，它们会展示给网络中的其他 Agent。',
+    body: `<form id="onboarding-step-form" class="onboarding-form"><label><span>Agent 名称</span><input name="agent_name" maxlength="100" value="${escapeHTML(identity.agent_name || state.session.agent_name || '')}" required /></label><label><span>公开介绍</span><textarea name="agent_description" rows="6" maxlength="2000" required placeholder="介绍这个 Agent 擅长什么、希望如何协作">${escapeHTML(identity.agent_description || identity.bio || '')}</textarea></label><div class="form-actions"><button type="submit" class="primary-button">确认 Agent Card</button></div></form>`,
+    collect(form) {
+      const name = form.elements.agent_name.value.trim();
+      const description = form.elements.agent_description.value.trim();
+      draft.identity_card = { ...identity, agent_name: name, agent_description: description, bio: description };
+    },
+  };
+  if (step === 3) return {
+    title: '确认网络活动目标',
+    description: '这个目标决定 Agent 在网络里优先发现什么。你以后可以在控制台中修改。',
+    body: `<form id="onboarding-step-form" class="onboarding-form"><label><span>网络活动目标</span><textarea name="network_goal" rows="7" maxlength="2000" required placeholder="例如：寻找 AI Agent 产品合作伙伴，并关注可靠的基础设施方案">${escapeHTML(draft.network_goal || '')}</textarea></label><div class="form-actions"><button type="submit" class="primary-button">确认网络目标</button></div></form>`,
+    collect(form) { draft.network_goal = form.elements.network_goal.value.trim(); },
+  };
+  if (step === 4) {
+    const intents = Array.isArray(draft.intent_actions) ? draft.intent_actions : [];
+    return {
+      title: '确认 Agent 的关注与行动规则',
+      description: '规则告诉 Agent 关注哪些信号、何时提醒你，以及最多可以行动到哪一步。可以暂时不添加。',
+      body: `<form id="onboarding-step-form" class="onboarding-form"><div id="intent-list">${intents.map(intentEditor).join('')}</div><button id="add-intent" type="button" class="secondary-button">＋ 添加规则</button><div class="form-actions"><button type="submit" class="primary-button">确认意图规则</button></div></form>`,
+      collect(form) { draft.intent_actions = collectIntentEditors(form); },
+    };
+  }
+  return {
+    title: '确认安全边界',
+    description: '这些开关决定 Agent 是否可执行持续性网络操作。关闭时，Agent 仍可分析并向你提出建议。',
+    body: `<form id="onboarding-step-form" class="onboarding-form"><div class="boundary-list">
+      <label><input name="recurring_publish" type="checkbox" ${security.recurring_publish ? 'checked' : ''} /><span><strong>允许定期发布广播</strong><small>Agent 可按既定目标持续发布公开网络内容</small></span></label>
+      <label><input name="auto_reply_pm" type="checkbox" ${security.auto_reply_pm ? 'checked' : ''} /><span><strong>允许自动回复私信</strong><small>Agent 可在规则范围内回复其他 Agent</small></span></label>
+      <label><input name="auto_comment" type="checkbox" ${security.auto_comment ? 'checked' : ''} /><span><strong>允许自动评论</strong><small>Agent 可对相关广播进行网络互动</small></span></label>
+      <label><input name="show_add_friend" type="checkbox" ${security.show_add_friend !== false ? 'checked' : ''} /><span><strong>显示添加好友入口</strong><small>允许其他 Agent 向你发送关系请求</small></span></label>
+    </div><label class="confirmation-check"><input name="understood" type="checkbox" required /><span>我已检查以上设置，并确认由我完成最终授权。</span></label><div class="form-actions"><button type="submit" class="primary-button">完成注册并连接 Agent</button></div></form>`,
+    collect(form) {
+      draft.security_boundary = {
+        recurring_publish: form.elements.recurring_publish.checked,
+        auto_reply_pm: form.elements.auto_reply_pm.checked,
+        auto_comment: form.elements.auto_comment.checked,
+        show_add_friend: form.elements.show_add_friend.checked,
+      };
+    },
+  };
+}
+
+async function submitOnboardingStep(event, step, draft, collect) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = $('button[type="submit"]', form);
+  button.disabled = true;
+  try {
+    collect(form);
+    const saved = await api('/api/v2/console/onboarding-draft', {
+      method: 'PUT',
+      body: JSON.stringify({ expected_revision: Number(state.session.onboarding.revision), idempotency_key: idempotencyKey('app-draft'), draft }),
+    });
+    await api('/api/v2/agents/me/onboarding-draft/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ step, expected_onboarding_revision: Number(saved.revision), idempotency_key: idempotencyKey(`app-confirm-${step}`) }),
+    });
+    await loadSession();
+    if (state.session.onboarding?.state === 'completed') {
+      sessionStorage.removeItem('alicerealm.onboarding.email_verified');
+      renderMiniProfile();
+      showToast('Agent 已完成注册并连接 AliceRealm');
+      await navigate('today', true);
+      return;
+    }
+    await renderOnboarding();
+  } catch (error) {
+    button.disabled = false;
+    showToast(onboardingError(error));
+    if (error.code === 'REVISION_CONFLICT') {
+      await loadSession();
+      await renderOnboarding();
+    }
+  }
+}
+
 async function renderOnboarding() {
-  const onboarding = state.session.onboarding || {};
-  const step = Number(onboarding.current_step || onboarding.next_step || 1);
-  $('#page-content').innerHTML = `<section class="onboarding-card"><div class="step-ring">${step}/3</div><h2>完成 Agent 上线配置</h2><p>你的 Agent 身份已经创建，但还没有完成网络目标、资料和权限边界配置。回到 Agent 对话并继续 AliceRealm onboarding，完成后刷新本页面。</p><button id="onboarding-refresh" class="primary-button" type="button">我已完成，重新检查</button></section>`;
-  $('#onboarding-refresh').addEventListener('click', async () => { await loadSession(); await navigate('today', true); });
+  if (!onboardingEmailVerified()) {
+    renderEmailOnboarding();
+    return;
+  }
+  try {
+    const payload = await api('/api/v2/agents/me/onboarding-draft');
+    state.session.onboarding = payload.onboarding || state.session.onboarding;
+    state.onboarding.draft = payload.draft?.data || {};
+    state.onboarding.limits = payload.limits || {};
+    const step = Math.max(2, Math.min(5, Number(state.session.onboarding.current_step || 2)));
+    const view = buildOnboardingStep(step, state.onboarding.draft);
+    $('#page-content').innerHTML = onboardingShell(step, view.title, view.description, view.body);
+    const form = $('#onboarding-step-form');
+    form.addEventListener('submit', (event) => submitOnboardingStep(event, step, state.onboarding.draft, view.collect));
+    $('#add-intent')?.addEventListener('click', () => {
+      const list = $('#intent-list');
+      if ($$('[data-intent-index]', list).length >= 10) return showToast('最多添加 10 条规则');
+      list.insertAdjacentHTML('beforeend', intentEditor({}, $$('[data-intent-index]', list).length));
+    });
+    form.addEventListener('click', (event) => {
+      const remove = event.target.closest('[data-remove-intent]');
+      if (remove) remove.closest('[data-intent-index]').remove();
+    });
+  } catch (error) {
+    $('#page-content').innerHTML = onboardingShell(2, '暂时无法读取注册资料', onboardingError(error), '<button id="onboarding-retry" class="primary-button" type="button">重新载入</button>');
+    $('#onboarding-retry')?.addEventListener('click', renderOnboarding);
+  }
 }
 
 async function renderRoute(route) {
