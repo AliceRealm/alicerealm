@@ -300,6 +300,7 @@ func main() {
 
 	// Public installation entry document and installer scripts.
 	h.StaticFile("/bootstrap.md", "static/BOOTSTRAP.md")
+	h.StaticFile("/install.md", "skills/install.md")
 	install.RegisterShellInstaller(h)
 	h.StaticFile("/install.ps1", "static/install.ps1")
 	h.StaticFile("/uninstall.sh", "static/uninstall.sh")
