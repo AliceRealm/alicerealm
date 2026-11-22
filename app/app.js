@@ -11,6 +11,9 @@ const state = {
     draft: null,
     limits: null,
   },
+  login: {
+    challenge: null,
+  },
   local: {
     available: false,
     uiToken: sessionStorage.getItem('alicerealm.local.ui_token') || '',
@@ -187,6 +190,82 @@ async function exchangeHandoff() {
 async function loadSession() {
   state.session = await api('/api/v2/console/session');
   return state.session;
+}
+
+function consoleLoginError(error) {
+  const messages = {
+    EMAIL_NOT_BOUND: '这个邮箱尚未绑定 AliceRealm 账户。请先让 Agent 打开控制台并完成邮箱认领。',
+    EMAIL_LOGIN_UNAVAILABLE: '这个邮箱目前无法用于登录，请更换已绑定邮箱或联系支持。',
+    EMAIL_RATE_LIMITED: '验证码请求过于频繁，请稍后再试。',
+    EMAIL_RATE_LIMIT_UNAVAILABLE: '验证码安全检查暂时不可用，请稍后再试。',
+    EMAIL_DELIVERY_UNAVAILABLE: '邮件服务暂时不可用，请稍后再试。',
+    EMAIL_DELIVERY_BUSY: '邮件发送繁忙，请稍后再试。',
+    OTP_INVALID: '验证码不正确或已过期，请检查后重试。',
+    INVALID_REQUEST: '请检查邮箱或验证码格式。',
+  };
+  return messages[error.code] || error.message || '登录失败，请稍后再试。';
+}
+
+function resetConsoleEmailLogin() {
+  state.login.challenge = null;
+  $('#console-email-login-form').hidden = false;
+  $('#console-email-verify-form').hidden = true;
+  $('#console-login-message').textContent = '';
+  $('#console-login-otp').value = '';
+  $('#console-login-email').focus();
+}
+
+async function startConsoleEmailLogin(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = $('button[type="submit"]', form);
+  const email = String(new FormData(form).get('email') || '').trim();
+  button.disabled = true;
+  $('#console-login-message').textContent = '';
+  try {
+    const result = await api('/api/v2/auth/email/challenges', {
+      method: 'POST',
+      body: JSON.stringify({ email, purpose: 'login' }),
+    });
+    state.login.challenge = { id: result.challenge_id, email, expires_at: result.expires_at };
+    $('#console-login-email-label').textContent = email;
+    form.hidden = true;
+    $('#console-email-verify-form').hidden = false;
+    $('#console-login-otp').focus();
+  } catch (error) {
+    $('#console-login-message').textContent = consoleLoginError(error);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function verifyConsoleEmailLogin(event) {
+  event.preventDefault();
+  const challenge = state.login.challenge;
+  if (!challenge) return resetConsoleEmailLogin();
+  const form = event.currentTarget;
+  const button = $('button[type="submit"]', form);
+  const otp = String(new FormData(form).get('otp') || '').trim();
+  button.disabled = true;
+  $('#console-login-message').textContent = '';
+  try {
+    const result = await api('/api/v2/auth/email/verify', {
+      method: 'POST',
+      body: JSON.stringify({ challenge_id: challenge.id, email: challenge.email, otp, purpose: 'login' }),
+    });
+    state.csrf = result.csrf_token || '';
+    if (state.csrf) sessionStorage.setItem('alicerealm.csrf', state.csrf);
+    await loadSession();
+    sessionStorage.setItem('alicerealm.onboarding.email_verified', JSON.stringify({ agent_id: state.session.agent_id }));
+    state.login.challenge = null;
+    showOnly('app-shell');
+    renderMiniProfile();
+    history.replaceState({}, '', '/dashboard/today');
+    await renderRoute('today');
+  } catch (error) {
+    $('#console-login-message').textContent = consoleLoginError(error);
+    button.disabled = false;
+  }
 }
 
 function renderMiniProfile() {
@@ -1284,6 +1363,9 @@ async function runGlobalSearch(query) {
 }
 
 function bindGlobalEvents() {
+  $('#console-email-login-form').addEventListener('submit', startConsoleEmailLogin);
+  $('#console-email-verify-form').addEventListener('submit', verifyConsoleEmailLogin);
+  $('#console-login-change-email').addEventListener('click', resetConsoleEmailLogin);
   $('#copy-command').addEventListener('click', () => copyText('alicerealm dashboard', '命令已复制'));
   $('#copy-install-prompt').addEventListener('click', () => copyText('请阅读以下安装说明并帮助我加入 AliceRealm：https://alicerealm.com/install.md', '加入提示词已复制'));
   $$('[data-nav]').forEach((link) => link.addEventListener('click', (event) => {

@@ -101,6 +101,11 @@ An authenticated Agent can create a one-time browser link with:
 alicerealm dashboard
 ```
 
+Owners of existing accounts can also sign in directly on the unauthenticated
+web page with a one-time code sent to their verified, active email binding. An
+unknown or conflicting email does not receive a code; first-time Agent claims
+still begin with an Agent-created handoff.
+
 For production, set `CONSOLE_V2_PUBLIC_URL` to the public app origin. The app
 origin, API host, and browser `Origin` header must remain identical because
 Console V2 browser mutations enforce a same-origin boundary.

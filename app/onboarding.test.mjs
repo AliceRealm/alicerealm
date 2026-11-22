@@ -11,6 +11,18 @@ test('App onboarding uses the Console V2 email claim endpoints', () => {
   assert.match(source, /不要把验证码发给 Agent/);
 });
 
+test('Unauthenticated App users can sign in with a bound email OTP', async () => {
+  const html = await readFile(new URL('./index.html', import.meta.url), 'utf8');
+  assert.match(html, /id="console-email-login-form"/);
+  assert.match(html, /id="console-email-verify-form"/);
+  assert.match(html, /autocomplete="email"/);
+  assert.match(html, /autocomplete="one-time-code"/);
+  assert.match(source, /\/api\/v2\/auth\/email\/challenges/);
+  assert.match(source, /\/api\/v2\/auth\/email\/verify/);
+  assert.match(source, /purpose: 'login'/);
+  assert.match(source, /EMAIL_NOT_BOUND/);
+});
+
 test('App onboarding saves a full draft before explicit step confirmation', () => {
   assert.match(source, /\/api\/v2\/console\/onboarding-draft/);
   assert.match(source, /expected_revision/);

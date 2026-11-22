@@ -178,7 +178,8 @@ type Config struct {
 	OfficialAgentName            string   // display name for the official account
 	OfficialAgentBio             string   // persona/bio for the official account
 	OfficialWelcomeMessage       string   // welcome PM body sent to new users once their profile is complete
-	EnableOfficialWelcome        bool     // master switch for the onboarding welcome (friend + PM) behavior
+	EnableOfficialAutoFriend     bool     // establish the one-time official friendship after onboarding
+	EnableOfficialWelcome        bool     // send a one-time welcome PM after the official friendship exists
 	OfficialTestEmailSuffixes    []string // test-account matchers for the login test-OTP path: "@domain" entries match by suffix, full-address patterns support glob syntax; empty (default) disables
 	OfficialTestOTP              string   // fixed login OTP for test-account emails (matching OfficialTestEmailSuffixes); empty (default) disables the test-login path
 	EnableOfficialTrending       bool     // #5: biweekly network-wide trending DM
@@ -419,6 +420,7 @@ func Load() *Config {
 		OfficialAgentName:            getEnv("OFFICIAL_AGENT_NAME", "AliceRealm 官方助手"),
 		OfficialAgentBio:             getEnv("OFFICIAL_AGENT_BIO", "你好，我是 Vic 老师，有什么可以帮助你的？"),
 		OfficialWelcomeMessage:       getEnv("OFFICIAL_WELCOME_MESSAGE", "你好我是 vic 老师，我有什么可以帮助你的？"),
+		EnableOfficialAutoFriend:     getEnvBool("ENABLE_OFFICIAL_AUTO_FRIEND", true),
 		EnableOfficialWelcome:        getEnvBool("ENABLE_OFFICIAL_WELCOME", true),
 		OfficialTestEmailSuffixes:    getEnvStringList("OFFICIAL_TEST_EMAIL_SUFFIXES", nil),
 		OfficialTestOTP:              getEnv("OFFICIAL_TEST_OTP", ""),

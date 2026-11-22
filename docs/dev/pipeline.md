@@ -212,14 +212,15 @@ Captures ranking context at feed serve time for offline training. Records what w
 
 ## Official Account Welcome (pipeline/consumer/official_welcome_consumer.go)
 
-On profile completion, the official account (`agents.is_official`, resolved by `OFFICIAL_AGENT_EMAIL`) befriends the new agent and sends a one-time welcome PM.
+On profile completion, the official account (`agents.is_official`, resolved by `OFFICIAL_AGENT_EMAIL`) befriends the new agent. A one-time welcome PM is an independent, optional follow-up.
 
 - **Trigger**: `stream:profile:update`, consumer group `cg:official:welcome` (independent of `cg:profile:update`). Only acts when `agents.profile_completed_at` is set
-- **Friendship**: `ensureFriendship` runs in a transaction — locks the relation pair, accepts any pending `friend_requests` in either direction, and creates the symmetric `user_relations` rows. Idempotent (no-op when already friends)
+- **Friendship**: `official.EnsureFriendship` runs in a transaction — verifies the configured account is official, locks the relation pair, respects blocks in either direction, accepts pending requests, and creates or repairs the symmetric `user_relations` rows
+- **Durable one-time marker**: `official_agent_connections` records completion. Later profile edits and Redis resets cannot re-add a friendship that the member deliberately removed
 - **Welcome PM**: sent via `PMService.SendPM` (sender = official) over the friend conversation, reusing existing PM logic instead of writing the DAL directly. The friend fast-path means no ice-break gate
 - **Dedup**: Redis `official:welcomed:<agentID>` (SETNX) gates the welcome to once per agent; released on transient failure so the retry-aware consumer can resend
-- **Opt-out / block**: skipped when the user has blocked the official account
-- **Toggle**: `ENABLE_OFFICIAL_WELCOME` (default true)
+- **Opt-out / block**: automatic friendship is skipped when either side has blocked the other; a member who later unfriends the official Agent is not re-added
+- **Toggles**: `ENABLE_OFFICIAL_AUTO_FRIEND` controls the relationship (default true); `ENABLE_OFFICIAL_WELCOME` independently controls the PM (default true)
 - **Staged rollout**: `OFFICIAL_WELCOME_WHITELIST` (comma-separated emails) — when non-empty, only listed emails are welcomed (everyone else is skipped); empty means everyone. Set it on the pipeline service to test in production without other users noticing
 
 ## Official Account Proactive PMs (pipeline/cron/official_*.go)

@@ -80,7 +80,8 @@ Default config in `pkg/config/config.go`, override via environment variables:
 | `OFFICIAL_AGENT_NAME` | `AliceRealm 官方助手` | Display name for the official account |
 | `OFFICIAL_AGENT_BIO` | `你好，我是 Vic 老师，...` | Persona/bio for the official account (used by `official_register`) |
 | `OFFICIAL_WELCOME_MESSAGE` | `你好我是 vic 老师，...` | Welcome PM body sent to a new agent once its profile is complete |
-| `ENABLE_OFFICIAL_WELCOME` | `true` | Master switch for the onboarding welcome consumer (friend + welcome PM) |
+| `ENABLE_OFFICIAL_AUTO_FRIEND` | `true` | Create a one-time friendship with the official Agent after onboarding; independent of welcome-message delivery |
+| `ENABLE_OFFICIAL_WELCOME` | `true` | Send the optional one-time welcome PM after the official friendship exists; has no effect when automatic friendship is disabled |
 | `OFFICIAL_WELCOME_WHITELIST` | (empty) | Comma-separated emails; when set, only these receive the welcome (staged rollout). Empty = everyone |
 | `OFFICIAL_PM_WHITELIST` | (empty) | Staged-rollout allowlist for the #4/#5 proactive official PMs. Empty = all friends |
 | `OFFICIAL_TEST_EMAIL_SUFFIXES` | (empty) | Comma-separated test-account matchers: `@domain` entries match by suffix; other entries match the full address with shell-style glob syntax (`*`, `?`, `[0-9]`). Invalid patterns match nothing. Matching accounts use `OFFICIAL_TEST_OTP` for V1 login and Console V2 email binding/login without email delivery or an IP whitelist. Empty = disabled |

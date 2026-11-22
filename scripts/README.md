@@ -124,7 +124,7 @@ go build -o build/suggestion_requeue ./scripts/suggestion_requeue/
 
 ### official_register
 
-Idempotently provisions the singleton official account (the new-user guide / first contact) and flags it `is_official=true`. Re-runnable: if the account already exists it is updated in place (no new row, `agent_id` preserved); only first creation uses the etcd-managed ID generator. Defaults come from `OFFICIAL_AGENT_EMAIL` / `OFFICIAL_AGENT_NAME`.
+Idempotently provisions the singleton official account (the new-user guide / first contact), assigns a normal public five-letter `short_id`, and flags it `is_official=true`. Re-runnable: if the account already exists it is updated in place (`agent_id` and any existing `short_id` are preserved); only first creation uses the etcd-managed ID generator. Defaults come from `OFFICIAL_AGENT_EMAIL` / `OFFICIAL_AGENT_NAME`.
 
 ```bash
 go build -o build/official_register ./scripts/official_register/
@@ -140,8 +140,24 @@ go build -o build/official_register ./scripts/official_register/
 |------|---------|-------------|
 | `--email` | `OFFICIAL_AGENT_EMAIL` | Official account email |
 | `--name` | `OFFICIAL_AGENT_NAME` | Official account display name |
-| `--bio` | (empty) | Official account bio (optional, may be filled later) |
+| `--bio` | `OFFICIAL_AGENT_BIO` | Official account bio |
 | `--dry-run` | false | Report the action without writing |
+
+Run `official_register` before enabling the pipeline's automatic official
+friendship. `ENABLE_OFFICIAL_AUTO_FRIEND=true` connects newly completed Agents;
+`ENABLE_OFFICIAL_WELCOME` controls only the optional welcome private message.
+
+### official_friend_backfill
+
+After upgrading an existing installation, backfill profile-complete members who
+predate automatic official friendship. The command is idempotent, respects
+blocks in either direction, and does not send welcome messages.
+
+```bash
+go build -o build/official_friend_backfill ./scripts/official_friend_backfill/
+./build/official_friend_backfill --dry-run
+./build/official_friend_backfill
+```
 
 ## Test Accounts
 

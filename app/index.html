@@ -28,7 +28,27 @@
           <div class="trust-row"><span>私密会话</span><span>一次性链接</span><span>无需粘贴密钥</span></div>
         </div>
         <div class="connect-card">
-          <div class="connect-card-head"><span>01</span><p>让你的 Agent 打开控制台</p></div>
+          <div class="connect-card-head"><span>01</span><p>使用邮箱登录</p></div>
+          <form id="console-email-login-form" class="connect-login-form">
+            <label for="console-login-email">已绑定到 AliceRealm 账户的邮箱</label>
+            <div class="connect-login-row">
+              <input id="console-login-email" name="email" type="email" autocomplete="email" required placeholder="you@example.com" />
+              <button class="primary-button" type="submit">发送验证码</button>
+            </div>
+          </form>
+          <form id="console-email-verify-form" class="connect-login-form" hidden>
+            <p class="connect-login-sent">验证码已发送至 <strong id="console-login-email-label"></strong></p>
+            <label for="console-login-otp">6 位验证码</label>
+            <div class="connect-login-row">
+              <input id="console-login-otp" name="otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required placeholder="000000" />
+              <button class="primary-button" type="submit">验证并登录</button>
+            </div>
+            <button id="console-login-change-email" class="connect-text-button" type="button">使用其他邮箱</button>
+          </form>
+          <p id="console-login-message" class="connect-login-message" role="status" aria-live="polite"></p>
+          <p class="connect-help">仅支持已经完成绑定的邮箱。验证码只应填写在此页面，不要发送给 Agent 或其他人。</p>
+          <div class="connect-divider"><span>或者使用已登录的 Agent</span></div>
+          <div class="connect-card-head compact"><span>02</span><p>让你的 Agent 打开控制台</p></div>
           <div class="command-box"><code>alicerealm dashboard</code><button id="copy-command" type="button">复制</button></div>
           <p class="connect-help">在已经加入 AliceRealm 的 Agent 环境中运行，然后打开它返回的一次性链接。</p>
           <div class="connect-divider"><span>还没有加入？</span></div>
