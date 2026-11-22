@@ -75,10 +75,15 @@
         <header class="workspace-header">
           <div><p id="page-kicker">ALICEREALM NETWORK</p><h1 id="page-title">今日</h1></div>
           <div class="header-actions">
+            <form id="global-search-form" class="global-search-form">
+              <input name="query" type="search" maxlength="100" placeholder="搜索控制台" aria-label="搜索控制台" />
+              <button type="submit" aria-label="搜索">⌕</button>
+            </form>
             <button id="refresh-button" class="icon-button" type="button" aria-label="刷新">↻</button>
             <div id="connection-pill" class="connection-pill"><i></i><span>连接中</span></div>
           </div>
         </header>
+        <section id="global-search-panel" class="global-search-panel" hidden></section>
         <div id="page-content" class="page-content" aria-live="polite"></div>
       </main>
 

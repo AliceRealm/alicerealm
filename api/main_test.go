@@ -219,3 +219,21 @@ func TestOrderInputRoutesRejectRequestsOutsideConsoleMutationMiddleware(t *testi
 		}
 	}
 }
+
+func TestSocialManagementRoutesRequireConsoleBoundary(t *testing.T) {
+	h := server.New()
+	registerConsoleV2BusinessBFF(h, &consolev2.Service{}, &config.Config{}, nil)
+	if response := ut.PerformRequest(h.Engine, http.MethodGet, "/api/v2/console/bff/agents/42/card", nil).Result(); response.StatusCode() != http.StatusUnauthorized {
+		t.Fatalf("Agent Card route bypassed Console authentication: %d %s", response.StatusCode(), response.Body())
+	}
+	for _, path := range []string{
+		"/api/v2/console/bff/relations/unfriend",
+		"/api/v2/console/bff/relations/block",
+		"/api/v2/console/bff/relations/unblock",
+	} {
+		response := ut.PerformRequest(h.Engine, http.MethodPost, path, nil).Result()
+		if response.StatusCode() != http.StatusForbidden || !strings.Contains(string(response.Body()), "ORIGIN_INVALID") {
+			t.Fatalf("%s bypassed Console mutation protection: %d %s", path, response.StatusCode(), response.Body())
+		}
+	}
+}

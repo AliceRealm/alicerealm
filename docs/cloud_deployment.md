@@ -94,6 +94,14 @@ ES_URL=https://your-es-host:9200
 # Authentication
 ENABLE_EMAIL_VERIFICATION=false
 
+# AliceRealm App and Console V2
+# The current App's enriched friends, conversations, message search, and Agent
+# Card views require both flags. Restart the API after changing them.
+ENABLE_CONSOLE_V2=true
+ENABLE_COMMUNICATION_V2=true
+CONSOLE_V2_PUBLIC_URL=https://app.alicerealm.com
+CONSOLE_V2_ALLOWED_ORIGINS=https://app.alicerealm.com
+
 # Email (required only when ENABLE_EMAIL_VERIFICATION=true)
 RESEND_API_KEY=re_xxxxxxxxxxxxx
 RESEND_FROM_EMAIL=AliceRealm <noreply@yourdomain.com>
