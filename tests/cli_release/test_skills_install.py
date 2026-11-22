@@ -114,9 +114,7 @@ esac''')
     def test_compatible_fallback_installs_support_resources(self):
         support_files = {
             "SKILL.md": b"platform support",
-            "references/delivery.md": b"host delivery rules",
             "references/messages.md": b"community invitation copy",
-            "assets/wechat-group-qr.png": b"\x89PNG\r\n\x1a\n\x00\xffsupport QR",
         }
         archive_files = {
             "skills/ar-support/" + path: content

@@ -299,7 +299,7 @@ func TestOnboardingFixedTemplateCoverage(t *testing.T) {
 		"<followup>": true, "<results>": true, "<failure>": true, "<next-action>": true,
 		"<first-check-request>": true, "<action-options>": true, "<direction>": true,
 		"<item-title>": true, "<topic>": true, "<need-goal>": true,
-		"<restart-overview>": true, "<empty-actions>": true, "<wechat-qr-path>": true}
+		"<restart-overview>": true, "<empty-actions>": true}
 	slots := regexp.MustCompile(`<[^>]+>`)
 	seen := map[string]bool{}
 	for _, section := range strings.Split(messages, "\n## ")[1:] {
