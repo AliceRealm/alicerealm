@@ -16,9 +16,11 @@ import (
 	"eigenflux_server/pkg/logger"
 	"eigenflux_server/pkg/metrics"
 	"eigenflux_server/pkg/mq"
+	"eigenflux_server/pkg/pet"
 	"eigenflux_server/pkg/rpcx"
 	"eigenflux_server/pkg/telemetry"
 	"eigenflux_server/ws/handler"
+	petws "eigenflux_server/ws/pet"
 )
 
 func main() {
@@ -34,7 +36,9 @@ func main() {
 
 	go metrics.StartMetricsServer(cfg.WSPort + 1000)
 
-	// Redis (for Pub/Sub subscription).
+	// PostgreSQL authenticates pet devices and stores durable pet events.
+	db.Init(cfg.PgDSN)
+	// Redis wakes connected streams after durable writes.
 	db.InitRedis(cfg.RedisAddr, cfg.RedisPassword)
 	mq.Init(cfg.RedisAddr, cfg.RedisPassword)
 	mq.SetDefaultStreamMaxLen(cfg.MqStreamMaxLen)
@@ -77,6 +81,8 @@ func main() {
 	h := server.Default(server.WithHostPorts(listenAddr))
 	h.GET("/ws/pm", wsHandler.Serve)
 	h.GET("/api/v2/agent/events/ws", wsHandler.ServeAgentV2)
+	petHandler := petws.New(pet.NewStore(db.DB, db.RDB), db.RDB)
+	h.GET("/api/v2/pet/events/ws", petHandler.Serve)
 
 	logger.Default().Info("WS service started", "addr", listenAddr)
 	h.Spin()

@@ -1,0 +1,81 @@
+# Pet Realtime Foundation
+
+AliceRealm pets reuse the platform identity, friendship, block, PostgreSQL, and
+Redis infrastructure. They do not reuse the Agent event WebSocket connection.
+The Agent stream intentionally has one active connection per Agent, while a
+person may run a pet on several devices at the same time.
+
+This change is the backend foundation. It does not yet include the native
+desktop overlay, sprite renderer, or Codex/Claude/WorkBuddy adapters.
+
+## Trust Boundary
+
+- A signed-in Console user creates and revokes pet devices.
+- The raw `arpd_...` device token is returned once. PostgreSQL stores only its
+  SHA-256 hash.
+- Pet clients may send only the protocol whitelist: `wave`, `high_five`,
+  `visit_request`, `visit_accept`, `visit_decline`, `gift`, and `emote`.
+- Arbitrary commands, scripts, file paths, mouse input, screenshots, and remote
+  desktop operations are not protocol fields.
+- Interactions require an existing friendship, fail when either side has
+  blocked the other, and respect the receiver's pet preferences.
+
+## HTTP API
+
+Console session and CSRF protection:
+
+- `POST /api/v2/console/pet/devices`
+- `GET /api/v2/console/pet/devices`
+- `DELETE /api/v2/console/pet/devices/:device_id`
+- `GET /api/v2/console/pet/preferences`
+- `PUT /api/v2/console/pet/preferences`
+
+Pet device bearer token:
+
+- `POST /api/v2/pet/interactions`
+- `GET /api/v2/pet/interactions?cursor=0&limit=50`
+- `POST /api/v2/pet/interactions/:interaction_id/ack`
+
+`request_id` makes sends idempotent. Reusing it for a different receiver,
+event type, or payload returns a conflict. Agent and interaction identifiers
+are decimal strings at the JSON boundary.
+
+## Realtime Stream
+
+Connect to:
+
+```text
+wss://stream.alicerealm.com/api/v2/pet/events/ws?token=arpd_...&cursor=0
+```
+
+The stream is server-to-client. Mutations use HTTPS so authorization,
+idempotency, and error handling remain explicit. Each event has this envelope:
+
+```json
+{
+  "type": "pet.interaction",
+  "data": {
+    "interaction_id": "123",
+    "sender_agent_id": "45",
+    "receiver_agent_id": "67",
+    "event_type": "wave",
+    "payload": {"message": "hello"}
+  }
+}
+```
+
+PostgreSQL is the durable source of truth. Redis only wakes connected WS
+processes; a 15-second poll and the cursor recover missed notifications. A new
+connection from the same device replaces that device's old connection, but it
+does not replace another pet device or the Agent event stream.
+
+The query token must be sent only over TLS. Proxies must redact query strings
+from access logs. A future protocol revision may move browser credentials to a
+short-lived single-use WS ticket.
+
+## Current Limitations
+
+- Revoking a token prevents new HTTP and WS authentication, but an already
+  authenticated WS remains active until it disconnects or reconnects.
+- Presence, animation state synchronization, rate limits, abuse reporting, and
+  visit-session state machines are intentionally deferred to later milestones.
