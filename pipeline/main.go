@@ -42,6 +42,12 @@ import (
 
 func main() {
 	cfg := config.Load()
+	if handled, err := runOperatorCommand(cfg, os.Args[1:]); handled {
+		if err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if cfg.EnableNeedSearch {
 		if err := cfg.ValidateCommissionDiscoveryConfiguration(); err != nil {
 			log.Fatalf("discovery configuration: %v", err)
