@@ -20,18 +20,13 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"gorm.io/gorm"
-
+	"eigenflux_server/pipeline/official"
 	"eigenflux_server/pkg/config"
 	"eigenflux_server/pkg/db"
 	"eigenflux_server/pkg/mq"
-	pmdal "eigenflux_server/rpc/pm/dal"
 	"eigenflux_server/rpc/pm/relations"
 	profiledal "eigenflux_server/rpc/profile/dal"
 )
-
-// Matches OfficialWelcomeConsumer's officialWelcomeRemark.
-const officialFriendRemark = "AliceRealm 官方"
 
 type result int
 
@@ -58,13 +53,17 @@ func main() {
 		log.Fatalf("official account not found (email=%s): %v", cfg.OfficialAgentEmail, err)
 	}
 	officialID := official.AgentID
+	var isOfficial bool
+	if err := db.DB.Raw(`SELECT is_official FROM agents WHERE agent_id = ?`, officialID).Scan(&isOfficial).Error; err != nil || !isOfficial {
+		log.Fatalf("configured official account is not marked is_official=true (agent_id=%d)", officialID)
+	}
 	log.Printf("official account agent_id=%d email=%s", officialID, cfg.OfficialAgentEmail)
 
 	targets, err := loadTargets(officialID, *limit)
 	if err != nil {
 		log.Fatalf("load targets: %v", err)
 	}
-	log.Printf("backfill targets: %d users (profile-complete, not yet official friends, not blocking official)", len(targets))
+	log.Printf("backfill targets: %d users (profile-complete, not yet processed, no block in either direction)", len(targets))
 	if *dryRun {
 		log.Println("dry-run: no writes")
 		return
@@ -107,7 +106,7 @@ func main() {
 		_ = relations.InvalidateFriendCache(ctx, mq.RDB, officialID)
 	}
 
-	log.Printf("backfill done: created=%d skipped(already friend)=%d failed=%d total=%d",
+	log.Printf("backfill done: created=%d skipped(already friend/processed)=%d failed=%d total=%d",
 		created, skipped, failed, len(targets))
 }
 
@@ -117,51 +116,21 @@ func main() {
 // official account's own cache is the same key for every user, so the caller
 // invalidates it once after all workers finish. No welcome PM is sent.
 func ensureOfficialFriend(ctx context.Context, officialID, userID int64) result {
-	created := false
-	err := db.DB.Transaction(func(tx *gorm.DB) error {
-		if err := pmdal.LockRelationPair(tx, officialID, userID); err != nil {
-			return err
-		}
-		isFriend, err := pmdal.IsFriend(tx, officialID, userID)
-		if err != nil {
-			return err
-		}
-		if isFriend {
-			return nil
-		}
-		acceptPendingRequest(tx, userID, officialID)
-		acceptPendingRequest(tx, officialID, userID)
-		if err := pmdal.CreateFriendRelation(tx, officialID, userID, officialFriendRemark, ""); err != nil {
-			return err
-		}
-		created = true
-		return nil
-	})
+	connection, err := official.EnsureFriendship(db.DB, officialID, userID)
 	if err != nil {
 		log.Printf("agent_id=%d failed: %v", userID, err)
 		return resultFailed
 	}
-	if !created {
+	if !connection.Created {
 		return resultSkipped
 	}
 	_ = relations.InvalidateFriendCache(ctx, mq.RDB, userID)
 	return resultCreated
 }
 
-// acceptPendingRequest accepts a pending friend request from fromUID to toUID
-// (if any) so friend_requests stays consistent with the relation we build —
-// mirrors OfficialWelcomeConsumer.acceptPendingRequest.
-func acceptPendingRequest(tx *gorm.DB, fromUID, toUID int64) {
-	req, err := pmdal.GetFriendRequestBetweenForUpdate(tx, fromUID, toUID)
-	if err != nil || req == nil {
-		return
-	}
-	_, _ = pmdal.UpdateRequestStatusIfPending(tx, req.ID, pmdal.RequestStatusAccepted)
-}
-
 // loadTargets returns agent_ids that should be friended: profile-complete,
-// non-official users who are not already friends with the official account and
-// have not blocked it.
+// non-official users whose one-time official connection has not been processed
+// and who have not blocked (or been blocked by) the official account.
 func loadTargets(officialID int64, limit int) ([]int64, error) {
 	var ids []int64
 	sql := `
@@ -170,13 +139,15 @@ func loadTargets(officialID int64, limit int) ([]int64, error) {
 		 WHERE a.is_official = FALSE
 		   AND a.profile_completed_at IS NOT NULL
 		   AND NOT EXISTS (
-		         SELECT 1 FROM user_relations ur
-		          WHERE ur.from_uid = a.agent_id AND ur.to_uid = ? AND ur.rel_type = ?)
+		         SELECT 1 FROM official_agent_connections connection
+		          WHERE connection.official_agent_id = ? AND connection.agent_id = a.agent_id)
 		   AND NOT EXISTS (
 		         SELECT 1 FROM user_relations ur
-		          WHERE ur.from_uid = a.agent_id AND ur.to_uid = ? AND ur.rel_type = ?)
+		          WHERE ur.rel_type = 2
+		            AND ((ur.from_uid = a.agent_id AND ur.to_uid = ?)
+		              OR (ur.from_uid = ? AND ur.to_uid = a.agent_id)))
 		 ORDER BY a.agent_id ASC`
-	args := []any{officialID, pmdal.RelTypeFriend, officialID, pmdal.RelTypeBlock}
+	args := []any{officialID, officialID, officialID}
 	if limit > 0 {
 		sql += " LIMIT ?"
 		args = append(args, limit)

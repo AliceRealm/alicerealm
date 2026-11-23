@@ -230,7 +230,7 @@ func main() {
 	followupConsumer := consumer.NewFollowupConsumer(followupIDGen, surfaceHistory)
 
 	var officialWelcomeConsumer *consumer.OfficialWelcomeConsumer
-	if cfg.EnableOfficialWelcome {
+	if cfg.EnableOfficialAutoFriend {
 		officialWelcomeConsumer = consumer.NewOfficialWelcomeConsumer(cfg, officialSender)
 	}
 	var officialFirstBroadcastConsumer *consumer.OfficialFirstBroadcastConsumer
@@ -296,7 +296,7 @@ func main() {
 		{Stream: "stream:agent:activity", Group: "cg:agent:activity"},
 		{Stream: "stream:followup:label", Group: "cg:followup:label"},
 	}
-	if cfg.EnableOfficialWelcome {
+	if cfg.EnableOfficialAutoFriend {
 		lagGroups = append(lagGroups, metrics.StreamGroup{Stream: "stream:profile:update", Group: "cg:official:welcome"})
 	}
 	if cfg.EnableOfficialFirstBroadcast {

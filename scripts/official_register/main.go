@@ -11,14 +11,19 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log"
 	"strings"
 	"time"
 
+	"eigenflux_server/pkg/agentidentity"
 	"eigenflux_server/pkg/config"
 	"eigenflux_server/pkg/db"
 	"eigenflux_server/pkg/idgen"
+	profiledal "eigenflux_server/rpc/profile/dal"
+
+	"github.com/lib/pq"
 )
 
 func main() {
@@ -48,15 +53,19 @@ func main() {
 			log.Println("dry-run: no write")
 			return
 		}
+		if err := ensureShortID(existingID); err != nil {
+			log.Fatalf("ensure official short ID: %v", err)
+		}
 		if err := db.DB.Exec(`
 			UPDATE agents
 			   SET is_official = TRUE,
 			       agent_name = ?,
+			       bio = ?,
 			       updated_at = ?,
 			       email_verified_at = COALESCE(email_verified_at, ?),
 			       profile_completed_at = COALESCE(profile_completed_at, ?)
 			 WHERE email = ?`,
-			*name, now, now, now, *email).Error; err != nil {
+			*name, *bio, now, now, now, *email).Error; err != nil {
 			log.Fatalf("update official account: %v", err)
 		}
 		log.Printf("official account updated agent_id=%d", existingID)
@@ -77,14 +86,45 @@ func main() {
 		log.Fatalf("generate agent id: %v", err)
 	}
 
-	if err := db.DB.Exec(`
-		INSERT INTO agents
-			(agent_id, email, agent_name, bio, created_at, updated_at, email_verified_at, profile_completed_at, is_official)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)`,
-		agentID, *email, *name, *bio, now, now, now, now).Error; err != nil {
+	if err := profiledal.CreateAgent(db.DB, &profiledal.Agent{
+		AgentID: agentID, Email: *email, AgentName: *name, Bio: *bio, IsOfficial: true,
+	}); err != nil {
 		log.Fatalf("create official account: %v", err)
 	}
+	if err := db.DB.Exec(`UPDATE agents
+		SET email_verified_at = ?, profile_completed_at = ?, updated_at = ?
+		WHERE agent_id = ?`, now, now, now, agentID).Error; err != nil {
+		log.Fatalf("complete official account: %v", err)
+	}
 	log.Printf("official account created agent_id=%d email=%s", agentID, *email)
+}
+
+func ensureShortID(agentID int64) error {
+	var current string
+	if err := db.DB.Raw(`SELECT COALESCE(short_id, '') FROM agents WHERE agent_id = ?`, agentID).Scan(&current).Error; err != nil {
+		return err
+	}
+	if agentidentity.ValidShortID(current) {
+		return nil
+	}
+	for attempt := 0; attempt < 100; attempt++ {
+		shortID, err := agentidentity.GenerateShortID()
+		if err != nil {
+			return err
+		}
+		result := db.DB.Exec(`UPDATE agents SET short_id = ? WHERE agent_id = ? AND short_id IS NULL`, shortID, agentID)
+		if result.Error == nil {
+			if result.RowsAffected == 1 {
+				return nil
+			}
+			return errors.New("official account short ID was changed concurrently")
+		}
+		var pqErr *pq.Error
+		if !errors.As(result.Error, &pqErr) || pqErr.Code != "23505" {
+			return result.Error
+		}
+	}
+	return errors.New("short ID collision retry budget exhausted")
 }
 
 func mustIDGen(cfg *config.Config) *idgen.ManagedGenerator {

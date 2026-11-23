@@ -44,6 +44,17 @@ a { color: inherit; text-decoration: none; }
 .connect-card-head { display: flex; align-items: center; gap: 14px; }
 .connect-card-head span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--lime); color: var(--ink); font: 750 12px ui-monospace, monospace; }
 .connect-card-head p { font-size: 18px; font-weight: 650; }
+.connect-card-head.compact { margin-top: 2px; }
+.connect-login-form { margin-top: 20px; }
+.connect-login-form label { display: block; margin: 0 0 8px; color: #c9d8d3; font-size: 12px; }
+.connect-login-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px; }
+.connect-login-row input { min-width: 0; min-height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: 13px; outline: none; background: #07100e; color: var(--paper); }
+.connect-login-row input:focus { border-color: rgba(185,255,102,.65); box-shadow: 0 0 0 3px rgba(185,255,102,.08); }
+.connect-login-row .primary-button { width: auto; padding-inline: 18px; white-space: nowrap; }
+.connect-login-sent { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+.connect-login-sent strong { color: var(--paper); }
+.connect-text-button { margin: 11px 0 0; padding: 0; border: 0; background: transparent; color: var(--mint); cursor: pointer; font-size: 12px; }
+.connect-login-message { min-height: 18px; margin: 10px 0 0; color: var(--coral); font-size: 12px; line-height: 1.5; }
 .command-box { margin-top: 22px; padding: 16px 14px 16px 19px; display: flex; align-items: center; justify-content: space-between; border-radius: 14px; background: #07100e; border: 1px solid rgba(185,255,102,.22); }
 .command-box code { color: var(--lime); font: 650 14px ui-monospace, "SFMono-Regular", Consolas, monospace; }
 .command-box button { border: 0; border-radius: 8px; background: var(--panel-2); color: var(--paper); padding: 8px 11px; cursor: pointer; }
@@ -391,6 +402,8 @@ a { color: inherit; text-decoration: none; }
   .form-actions { flex-direction: column-reverse; }
   .form-actions button { width: 100%; }
   .connect-card { padding: 23px; border-radius: 21px; }
+  .connect-login-row { grid-template-columns: 1fr; }
+  .connect-login-row .primary-button { width: 100%; }
   .metric-grid { grid-template-columns: 1fr 1fr; }
   .metric-card { padding: 16px; }
   .metric-card strong { font-size: 24px; }

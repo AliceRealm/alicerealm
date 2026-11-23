@@ -2,11 +2,10 @@ package consumer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
-
-	"gorm.io/gorm"
 
 	"eigenflux_server/pipeline/official"
 	"eigenflux_server/pkg/agentcard"
@@ -14,7 +13,6 @@ import (
 	"eigenflux_server/pkg/db"
 	"eigenflux_server/pkg/logger"
 	"eigenflux_server/pkg/mq"
-	pmdal "eigenflux_server/rpc/pm/dal"
 	"eigenflux_server/rpc/pm/relations"
 	profiledal "eigenflux_server/rpc/profile/dal"
 )
@@ -24,7 +22,6 @@ const (
 	officialWelcomeGroup        = "cg:official:welcome"
 	officialWelcomeConsumerName = "official-welcome-worker-1"
 	officialWelcomeMetricsLabel = "official:welcome"
-	officialWelcomeRemark       = "AliceRealm 官方"
 )
 
 func officialWelcomedKey(agentID int64) string {
@@ -39,6 +36,7 @@ type OfficialWelcomeConsumer struct {
 	sender         *official.Sender
 	welcomeMessage string
 	officialEmail  string
+	welcomeEnabled bool
 
 	runner *StreamConsumer
 
@@ -51,6 +49,7 @@ func NewOfficialWelcomeConsumer(cfg *config.Config, sender *official.Sender) *Of
 		sender:         sender,
 		welcomeMessage: cfg.OfficialWelcomeMessage,
 		officialEmail:  cfg.OfficialAgentEmail,
+		welcomeEnabled: cfg.EnableOfficialWelcome,
 	}
 	c.runner = &StreamConsumer{
 		Name:         "OfficialWelcomeConsumer",
@@ -76,11 +75,12 @@ func (c *OfficialWelcomeConsumer) resolveOfficialID() int64 {
 	if c.officialID != 0 {
 		return c.officialID
 	}
-	agent, err := profiledal.GetAgentByEmail(db.DB, c.officialEmail)
-	if err != nil || agent == nil {
+	var officialID int64
+	if err := db.DB.Raw(`SELECT agent_id FROM agents WHERE email = ? AND is_official = TRUE`, c.officialEmail).
+		Scan(&officialID).Error; err != nil || officialID == 0 {
 		return 0
 	}
-	c.officialID = agent.AgentID
+	c.officialID = officialID
 	return c.officialID
 }
 
@@ -97,8 +97,12 @@ func (c *OfficialWelcomeConsumer) handle(ctx context.Context, _ string, values m
 	}
 
 	officialID := c.resolveOfficialID()
-	if officialID == 0 || agentID == officialID {
+	if agentID == officialID {
 		return HandleSuccess
+	}
+	if officialID == 0 {
+		logger.Default().Warn("OfficialWelcomeConsumer official account is not provisioned", "email", c.officialEmail)
+		return HandleRetry
 	}
 
 	// Only welcome once the profile is actually complete. profile:update also
@@ -112,8 +116,29 @@ func (c *OfficialWelcomeConsumer) handle(ctx context.Context, _ string, values m
 		return HandleSuccess
 	}
 
-	// Dedup gate: welcome each agent at most once. Released on transient failure
-	// below so the message can be retried.
+	connection, err := official.EnsureFriendship(db.DB, officialID, agentID)
+	if errors.Is(err, official.ErrOfficialFriendBlocked) {
+		logger.Default().Info("OfficialWelcomeConsumer skip blocked relationship", "agentID", agentID)
+		return HandleSuccess
+	}
+	if err != nil {
+		logger.Default().Warn("OfficialWelcomeConsumer ensure friendship failed", "agentID", agentID, "err", err)
+		return HandleRetry
+	}
+	if connection.Created {
+		// PMService.SendPM checks friendship from a Redis friend-set cache; a
+		// relation created directly via the DAL must invalidate it.
+		_ = relations.InvalidateFriendCache(ctx, mq.RDB, officialID)
+		_ = relations.InvalidateFriendCache(ctx, mq.RDB, agentID)
+		agentcard.PublishRebuild(ctx, officialID, "friend_added")
+		agentcard.PublishRebuild(ctx, agentID, "friend_added")
+	}
+	if !c.welcomeEnabled || !connection.Active {
+		return HandleSuccess
+	}
+
+	// Welcome-message delivery is optional and separately deduplicated. The
+	// durable friendship above does not depend on Redis or LLM availability.
 	gateKey := officialWelcomedKey(agentID)
 	acquired, err := mq.RDB.SetNX(ctx, gateKey, "1", 0).Result()
 	if err != nil {
@@ -121,20 +146,7 @@ func (c *OfficialWelcomeConsumer) handle(ctx context.Context, _ string, values m
 		return HandleRetry
 	}
 	if !acquired {
-		return HandleSuccess // already welcomed
-	}
-
-	// Respect the user's strongest rejection signal: if they blocked the
-	// official account, do not friend or message them.
-	if blocked, err := pmdal.IsBlocked(db.DB, agentID, officialID); err == nil && blocked {
-		logger.Default().Info("OfficialWelcomeConsumer skip blocked user", "agentID", agentID)
 		return HandleSuccess
-	}
-
-	if err := c.ensureFriendship(ctx, officialID, agentID); err != nil {
-		_ = mq.RDB.Del(ctx, gateKey).Err()
-		logger.Default().Warn("OfficialWelcomeConsumer ensure friendship failed", "agentID", agentID, "err", err)
-		return HandleRetry
 	}
 
 	// Welcome copy is prompt-generated (official persona, scenario 1), personalized
@@ -158,53 +170,4 @@ func (c *OfficialWelcomeConsumer) handle(ctx context.Context, _ string, values m
 
 	logger.Default().Info("OfficialWelcomeConsumer welcomed new agent", "agentID", agentID, "officialID", officialID)
 	return HandleSuccess
-}
-
-// ensureFriendship makes officialID and userID friends if they are not already.
-// It is idempotent and accepts any pending friend request between them so the
-// friend_requests table stays consistent with the relation it creates.
-func (c *OfficialWelcomeConsumer) ensureFriendship(ctx context.Context, officialID, userID int64) error {
-	created := false
-	err := db.DB.Transaction(func(tx *gorm.DB) error {
-		if err := pmdal.LockRelationPair(tx, officialID, userID); err != nil {
-			return err
-		}
-		isFriend, err := pmdal.IsFriend(tx, officialID, userID)
-		if err != nil {
-			return err
-		}
-		if isFriend {
-			return nil
-		}
-		acceptPendingRequest(tx, userID, officialID)
-		acceptPendingRequest(tx, officialID, userID)
-		if err := pmdal.CreateFriendRelation(tx, officialID, userID, officialWelcomeRemark, ""); err != nil {
-			return err
-		}
-		created = true
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	if created {
-		// PMService.SendPM checks friendship from a Redis friend-set cache; a
-		// relation created directly via the DAL must invalidate it (as the normal
-		// accept path does) or the welcome PM is rejected as "not friends".
-		_ = relations.InvalidateFriendCache(ctx, mq.RDB, officialID)
-		_ = relations.InvalidateFriendCache(ctx, mq.RDB, userID)
-		// Friend adds project into both Cards' relation counts — same contract
-		// as the pm handler's accept paths.
-		agentcard.PublishRebuild(ctx, officialID, "friend_added")
-		agentcard.PublishRebuild(ctx, userID, "friend_added")
-	}
-	return nil
-}
-
-func acceptPendingRequest(tx *gorm.DB, fromUID, toUID int64) {
-	req, err := pmdal.GetFriendRequestBetweenForUpdate(tx, fromUID, toUID)
-	if err != nil || req == nil {
-		return
-	}
-	_, _ = pmdal.UpdateRequestStatusIfPending(tx, req.ID, pmdal.RequestStatusAccepted)
 }

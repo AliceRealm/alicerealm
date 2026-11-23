@@ -113,6 +113,7 @@ func TestOfficialWelcomeE2E(t *testing.T) {
 		}{
 			{"DELETE FROM private_messages WHERE sender_id IN (?,?) AND receiver_id IN (?,?)", []any{officialID, userID, officialID, userID}},
 			{"DELETE FROM conversations WHERE participant_a IN (?,?) AND participant_b IN (?,?)", []any{officialID, userID, officialID, userID}},
+			{"DELETE FROM official_agent_connections WHERE official_agent_id = ? AND agent_id = ?", []any{officialID, userID}},
 			{"DELETE FROM user_relations WHERE from_uid = ? OR to_uid = ?", []any{userID, userID}},
 			{"DELETE FROM friend_requests WHERE from_uid = ? OR to_uid = ?", []any{userID, userID}},
 			{"DELETE FROM agents WHERE agent_id = ?", []any{userID}},
@@ -156,6 +157,7 @@ func TestOfficialWelcomeE2E(t *testing.T) {
 		sender:         sender,
 		welcomeMessage: cfg.OfficialWelcomeMessage,
 		officialEmail:  cfg.OfficialAgentEmail,
+		welcomeEnabled: true,
 	}
 
 	res := c.handle(context.Background(), "0-0", map[string]any{"agent_id": strconv.FormatInt(userID, 10)})
