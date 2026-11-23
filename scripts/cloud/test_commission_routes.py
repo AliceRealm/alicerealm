@@ -130,10 +130,10 @@ class CommissionRoutesTest(unittest.TestCase):
             time.sleep(0.05)
         self.fail("Local Caddy did not become ready")
 
-    def request(self, method, path, headers=None):
+    def request(self, method, path, headers=None, host="alicerealm.com"):
         connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=2)
         try:
-            connection.request(method, path, headers={"Host": "alicerealm.com", **(headers or {})})
+            connection.request(method, path, headers={"Host": host, **(headers or {})})
             response = connection.getresponse()
             return response.status, json.loads(response.read())
         finally:
@@ -186,6 +186,19 @@ class CommissionRoutesTest(unittest.TestCase):
 
     def test_production_routes(self):
         self.check_routes("Caddyfile.prod")
+
+    def test_production_stream_routes(self):
+        self.start_caddy("Caddyfile.prod")
+        for path in (
+            "/ws/pm?token=fixture",
+            "/api/v2/agent/events/ws",
+            "/api/v2/pet/events/ws?token=fixture&cursor=0",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    self.request("GET", path, host="stream.alicerealm.com"),
+                    (200, ["gateway", "GET", path]),
+                )
 
     def test_browser_handoff_omits_sensitive_access_logs(self):
         self.start_caddy("Caddyfile.dev")
