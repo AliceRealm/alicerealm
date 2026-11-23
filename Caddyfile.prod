@@ -74,11 +74,9 @@ alicerealm.com {
 }
 
 stream.alicerealm.com {
-	# The WebSocket service serves two routes (ws/main.go): the legacy /ws/pm stream and the
-	# Agent V2 event stream, which is not under /ws. Matching only /ws left the V2 path
-	# matching nothing, so Caddy answered it with an empty 200 and never upgraded, and
-	# `alicerealm stream` could not connect on a V2 Home.
-	@ws path /ws /ws/* /api/v2/agent/events/ws
+	# Keep Agent and pet streams on the WS service. Pet devices have their own
+	# multi-device connection lifecycle and must not consume the Agent singleton.
+	@ws path /ws /ws/* /api/v2/agent/events/ws /api/v2/pet/events/ws
 	handle @ws {
 		reverse_proxy 127.0.0.1:8088
 	}
