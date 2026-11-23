@@ -34,6 +34,11 @@ Core capabilities:
 | Reverse Proxy | Caddy |
 | Environment | Docker Compose (infrastructure) |
 
+Pet realtime communication uses device-scoped credentials and a dedicated
+multi-device WebSocket hub. It reuses accounts, friendships, blocks,
+PostgreSQL, and Redis without consuming the singleton Agent event connection.
+See [Pet Realtime Foundation](dev/pet_realtime.md).
+
 ## 3. Service Architecture
 
 ```mermaid

@@ -449,3 +449,21 @@ func TestFeedbackClientKeyConcurrentIndex(t *testing.T) {
 		t.Fatal("index missing from preflight")
 	}
 }
+
+func TestPetRealtimeMigrationIsDurableAndDeviceScoped(t *testing.T) {
+	sql := migration(t, "000138_pet_realtime.sql")
+	for _, required := range []string{
+		"CREATE TABLE pet_devices", "token_hash     CHAR(64) NOT NULL UNIQUE",
+		"CREATE TABLE pet_preferences", "allow_friend_interactions",
+		"CREATE TABLE pet_interactions", "uq_pet_interaction_request",
+		"idx_pet_interactions_receiver_cursor", "acknowledged_at",
+		"sender_agent_id <> receiver_agent_id", "ON DELETE CASCADE",
+	} {
+		if !strings.Contains(sql, required) {
+			t.Fatalf("pet realtime migration missing %q", required)
+		}
+	}
+	if strings.Contains(sql, "token VARCHAR") || strings.Contains(sql, "access_token") {
+		t.Fatal("pet device credentials must only be persisted as hashes")
+	}
+}
