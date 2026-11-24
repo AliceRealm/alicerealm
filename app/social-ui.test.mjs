@@ -26,6 +26,16 @@ test('App exposes owner-safe relationship management and full Agent Cards', () =
   assert.match(source, /data-unblock-agent/);
 });
 
+test('App manages paired pet devices and exposes friend-only desktop actions', () => {
+  assert.match(source, /console\/pet\/pairings\/\$\{encodeURIComponent\(pairingID\)\}\/approve/);
+  assert.match(source, /console\/pet\/devices\/\$\{encodeURIComponent\(button\.dataset\.revokePetDevice\)\}/);
+  assert.match(source, /console\/pet\/preferences/);
+  assert.match(source, /alicerealm:\/\/pet\/send\?receiver_agent_id=/);
+  for (const action of ['wave', 'high_five', 'visit_request', 'gift']) {
+    assert.match(source, new RegExp(`['"]${action}['"]`));
+  }
+});
+
 test('App opens Attention and broadcast details with owner actions', () => {
   assert.match(source, /console\/attention-items\/\$\{encodeURIComponent\(attentionID\)\}\/respond/);
   assert.match(source, /console\/attention-items\/\$\{encodeURIComponent\(attentionID\)\}\/dismiss/);

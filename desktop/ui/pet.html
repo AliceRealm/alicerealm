@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>AliceRealm Pet</title>
+    <link rel="stylesheet" href="pet.css" />
+  </head>
+  <body>
+    <main class="pet-stage" aria-label="AliceRealm 桌宠原型">
+      <button id="pet" class="pet" type="button" aria-label="拖动 AliceRealm 桌宠" data-state="idle" data-tauri-drag-region>
+        <span class="ear ear-left" aria-hidden="true"></span>
+        <span class="ear ear-right" aria-hidden="true"></span>
+        <span class="arm arm-left" aria-hidden="true"></span>
+        <span class="arm arm-right" aria-hidden="true"></span>
+        <span class="face" aria-hidden="true">
+          <i class="eye eye-left"></i>
+          <i class="eye eye-right"></i>
+          <i class="mouth"></i>
+        </span>
+        <span id="pet-symbol" class="pet-symbol" aria-hidden="true"></span>
+        <span class="core" aria-hidden="true"><i></i><i></i><i></i></span>
+      </button>
+      <div id="pet-action-confirmation" class="pet-action-confirmation" hidden>
+        <p id="pet-action-copy"></p>
+        <div><button id="pet-action-cancel" type="button">取消</button><button id="pet-action-confirm" type="button">确认</button></div>
+      </div>
+      <p id="pet-status" class="pet-status" role="status" aria-live="polite">AliceRealm 桌宠待连接</p>
+    </main>
+    <script src="pet.js" type="module"></script>
+  </body>
+</html>

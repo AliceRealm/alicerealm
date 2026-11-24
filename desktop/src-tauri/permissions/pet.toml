@@ -1,0 +1,14 @@
+[[permission]]
+identifier = "allow-ack-pet-interaction"
+description = "Allows the packaged pet renderer to acknowledge an interaction after its animation completes."
+commands.allow = ["ack_pet_interaction"]
+
+[[permission]]
+identifier = "allow-confirm-pet-action"
+description = "Allows the packaged pet renderer to confirm a pending protocol-filtered friend action."
+commands.allow = ["confirm_pet_action"]
+
+[[permission]]
+identifier = "allow-cancel-pet-action"
+description = "Allows the packaged pet renderer to cancel a pending friend action."
+commands.allow = ["cancel_pet_action"]

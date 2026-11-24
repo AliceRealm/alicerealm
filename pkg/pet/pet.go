@@ -151,8 +151,8 @@ func HashToken(token string) string {
 }
 
 func (s *Store) CreateDevice(ctx context.Context, agentID int64, name, platform string) (Device, string, error) {
-	name, platform = strings.TrimSpace(name), strings.ToLower(strings.TrimSpace(platform))
-	if agentID <= 0 || name == "" || utf8.RuneCountInString(name) > 100 || !assetIDPattern.MatchString(platform) {
+	name, platform, err := validateDeviceMetadata(name, platform)
+	if agentID <= 0 || err != nil {
 		return Device{}, "", ErrInvalid
 	}
 	token, hash, err := NewDeviceToken()
