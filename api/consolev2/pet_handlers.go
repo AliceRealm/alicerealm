@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/app"
+	redis "github.com/redis/go-redis/v9"
 
 	"eigenflux_server/pkg/pet"
 )
@@ -16,6 +18,10 @@ import (
 type petCreateDeviceRequest struct {
 	DeviceName string `json:"device_name"`
 	Platform   string `json:"platform"`
+}
+
+type petExchangePairingRequest struct {
+	PairingSecret string `json:"pairing_secret"`
 }
 
 type petPreferenceRequest struct {
@@ -33,6 +39,106 @@ type petCreateInteractionRequest struct {
 }
 
 func (s *Service) petStore() *pet.Store { return pet.NewStore(s.db, s.redisClient) }
+
+var petPairingRateScript = redis.NewScript(`
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+if count > tonumber(ARGV[2]) then return 0 end
+return 1
+`)
+
+func (s *Service) allowPetPairingCreate(ctx context.Context, clientIPHash string) (bool, error) {
+	if s.redisClient == nil {
+		return false, pet.ErrUnavailable
+	}
+	allowed, err := petPairingRateScript.Run(ctx, s.redisClient, []string{"console:v2:pet-pairing:ip:" + clientIPHash}, 60, 20).Int()
+	return allowed == 1, err
+}
+
+func (s *Service) createPetPairing(ctx context.Context, c *app.RequestContext) {
+	allowed, err := s.allowPetPairingCreate(ctx, s.clientIPHash(c))
+	if err != nil {
+		fail(c, http.StatusServiceUnavailable, "PET_PAIRING_UNAVAILABLE", "pet pairing is temporarily unavailable", nil)
+		return
+	}
+	if !allowed {
+		fail(c, http.StatusTooManyRequests, "PET_PAIRING_RATE_LIMITED", "too many pet pairing attempts", nil)
+		return
+	}
+	var request petCreateDeviceRequest
+	if err := decodeBody(c, &request); err != nil {
+		fail(c, http.StatusBadRequest, "PET_PAIRING_INVALID", "device_name and platform are required", nil)
+		return
+	}
+	grant, err := s.petStore().CreatePairing(ctx, request.DeviceName, request.Platform)
+	if err != nil {
+		if errors.Is(err, pet.ErrInvalid) {
+			fail(c, http.StatusBadRequest, "PET_PAIRING_INVALID", "device_name or platform is invalid", nil)
+			return
+		}
+		fail(c, http.StatusServiceUnavailable, "PET_PAIRING_UNAVAILABLE", "pet pairing is temporarily unavailable", nil)
+		return
+	}
+	dashboardURL := s.publicURL + "/dashboard/settings?pet_pair=" + url.QueryEscape(grant.PairingID)
+	reply(c, http.StatusCreated, map[string]interface{}{"pairing": grant.Pairing, "pairing_secret": grant.PairingSecret, "dashboard_url": dashboardURL})
+}
+
+func (s *Service) getPetPairing(ctx context.Context, c *app.RequestContext) {
+	pairing, err := s.petStore().GetPairing(ctx, c.Param("pairing_id"))
+	if err != nil {
+		if errors.Is(err, pet.ErrExpired) || errors.Is(err, pet.ErrNotFound) {
+			fail(c, http.StatusNotFound, "PET_PAIRING_NOT_FOUND", "pet pairing was not found or expired", nil)
+			return
+		}
+		fail(c, http.StatusServiceUnavailable, "PET_PAIRING_UNAVAILABLE", "pet pairing is temporarily unavailable", nil)
+		return
+	}
+	reply(c, http.StatusOK, pairing)
+}
+
+func (s *Service) approvePetPairing(ctx context.Context, c *app.RequestContext) {
+	id, ok := agentID(c)
+	if !ok {
+		fail(c, http.StatusUnauthorized, "CONSOLE_SESSION_REQUIRED", "Console V2 session is required", nil)
+		return
+	}
+	device, err := s.petStore().ApprovePairing(ctx, id, c.Param("pairing_id"))
+	if err != nil {
+		switch {
+		case errors.Is(err, pet.ErrExpired), errors.Is(err, pet.ErrNotFound):
+			fail(c, http.StatusNotFound, "PET_PAIRING_NOT_FOUND", "pet pairing was not found or expired", nil)
+		case errors.Is(err, pet.ErrPairingUsed):
+			fail(c, http.StatusConflict, "PET_PAIRING_ALREADY_USED", "pet pairing was already approved", nil)
+		default:
+			fail(c, http.StatusServiceUnavailable, "PET_PAIRING_APPROVE_FAILED", "pet pairing could not be approved", nil)
+		}
+		return
+	}
+	reply(c, http.StatusOK, map[string]interface{}{"device": device, "approved": true})
+}
+
+func (s *Service) exchangePetPairing(ctx context.Context, c *app.RequestContext) {
+	var request petExchangePairingRequest
+	if err := decodeBody(c, &request); err != nil {
+		fail(c, http.StatusBadRequest, "PET_PAIRING_INVALID", "pairing_secret is required", nil)
+		return
+	}
+	device, token, err := s.petStore().ExchangePairing(ctx, c.Param("pairing_id"), request.PairingSecret)
+	if err != nil {
+		switch {
+		case errors.Is(err, pet.ErrPending):
+			fail(c, http.StatusConflict, "PET_PAIRING_PENDING", "pet pairing is waiting for owner approval", nil)
+		case errors.Is(err, pet.ErrUnauthorized):
+			fail(c, http.StatusUnauthorized, "PET_PAIRING_SECRET_INVALID", "pet pairing secret is invalid", nil)
+		case errors.Is(err, pet.ErrExpired), errors.Is(err, pet.ErrPairingUsed):
+			fail(c, http.StatusGone, "PET_PAIRING_EXPIRED", "pet pairing expired or was already exchanged", nil)
+		default:
+			fail(c, http.StatusServiceUnavailable, "PET_PAIRING_EXCHANGE_FAILED", "pet pairing could not be exchanged", nil)
+		}
+		return
+	}
+	reply(c, http.StatusOK, map[string]interface{}{"device": device, "device_token": token, "token_displayed_once": true})
+}
 
 func (s *Service) createPetDevice(ctx context.Context, c *app.RequestContext) {
 	id, ok := agentID(c)

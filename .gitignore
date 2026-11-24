@@ -42,6 +42,11 @@ __pycache__
 .log/
 .sqls
 /build/
+/desktop/node_modules/
+/desktop/dist/
+/desktop/src-tauri/target/
+/desktop/src-tauri/gen/schemas/
+/.cache/
 .env
 configs/pm/friend_request_limits.yaml
 .cli.env

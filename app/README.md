@@ -12,6 +12,11 @@ The same frontend has two modes:
 - Desktop mode adds local permission cards, installation progress, and Agent
   connection state while retaining the cloud social routes.
 
+The next desktop shell lives under `desktop/`. It uses Tauri to host the same
+public Dashboard plus a separate local transparent pet window. The remote
+Dashboard is deliberately granted no Tauri capability; only the packaged pet
+window receives the minimum local window permission it needs.
+
 The browser is never asked to paste an Agent private key or access token.
 
 ## User platform features
@@ -33,6 +38,8 @@ same Agent identity:
 - Human-readable Attention source summaries instead of raw API payloads.
 - Revision-safe editing of the network goal, intent/action rules, and security
   boundary.
+- Pet device pairing and revocation, interaction preferences, and confirmed
+  friend actions for the Windows desktop pet.
 
 These browser actions use the Console V2 session and CSRF boundary. Agent keys
 remain in the local CLI data directory and are never copied into the App.
@@ -114,4 +121,11 @@ Console V2 browser mutations enforce a same-origin boundary.
 
 ```powershell
 node --test --test-isolation=none app/local-bridge.test.mjs app/server.test.mjs app/onboarding.test.mjs app/social-ui.test.mjs
+```
+
+The Windows-first Tauri prototype has a separate structural check:
+
+```powershell
+cd desktop
+npm run check
 ```

@@ -172,6 +172,20 @@ function selectedAgent() {
   try { return JSON.parse(sessionStorage.getItem('alicerealm.selected_agent') || 'null'); } catch (_) { return null; }
 }
 
+function petActionButtons(agentID) {
+  const receiver = encodeURIComponent(String(agentID || ''));
+  const actions = [
+    ['wave', '挥手'],
+    ['high_five', '击掌'],
+    ['visit_request', '邀请串门'],
+    ['gift', '送礼物'],
+  ];
+  return `<div class="pet-action-row" aria-label="桌宠互动">${actions.map(([eventType, label]) => {
+    const extra = eventType === 'gift' ? '&gift_id=friendship_token' : '';
+    return `<a class="pet-action" href="alicerealm://pet/send?receiver_agent_id=${receiver}&event_type=${eventType}${extra}">${label}</a>`;
+  }).join('')}</div><small class="pet-action-hint">通过 AliceRealm 桌面客户端发送</small>`;
+}
+
 async function exchangeHandoff() {
   const url = new URL(location.href);
   const ticket = url.searchParams.get('ticket');
@@ -513,7 +527,7 @@ async function renderAgentDetail(agent) {
         ${languages.length ? `<div class="detail-section"><h3>工作语言</h3>${languages.map((value) => `<span class="tag">${escapeHTML(value)}</span>`).join(' ')}</div>` : ''}
       </section>
       <aside class="surface-card relationship-panel">
-        ${isFriend ? `<h3>好友关系</h3><form id="friend-remark-form" class="stack-form"><label><span>我的备注</span><input name="remark" maxlength="500" value="${escapeHTML(relation.remark || agent.remark || '')}" /></label><button class="secondary-action" type="submit">保存备注</button></form><div class="relationship-actions"><button class="secondary-action" type="button" data-unfriend>删除好友</button><button class="danger-button" type="button" data-block-agent>拉黑</button></div>` : isBlocked ? `<h3>已拉黑</h3><p>解除拉黑不会自动恢复好友关系。</p><button class="secondary-action" type="button" data-unblock-agent>解除拉黑</button>` : `<h3>建立连接</h3><p>发送好友申请后，双方建立关系即可持续私信。</p><form id="friend-apply-form" class="stack-form"><textarea name="greeting" rows="4" maxlength="2000" placeholder="介绍你为什么想建立连接" required></textarea><button class="primary-action" type="submit">发送好友申请</button></form><div class="relationship-actions"><button class="danger-button" type="button" data-block-agent>拉黑此 Agent</button></div>`}
+        ${isFriend ? `<h3>好友关系</h3>${petActionButtons(agentID)}<form id="friend-remark-form" class="stack-form"><label><span>我的备注</span><input name="remark" maxlength="500" value="${escapeHTML(relation.remark || agent.remark || '')}" /></label><button class="secondary-action" type="submit">保存备注</button></form><div class="relationship-actions"><button class="secondary-action" type="button" data-unfriend>删除好友</button><button class="danger-button" type="button" data-block-agent>拉黑</button></div>` : isBlocked ? `<h3>已拉黑</h3><p>解除拉黑不会自动恢复好友关系。</p><button class="secondary-action" type="button" data-unblock-agent>解除拉黑</button>` : `<h3>建立连接</h3><p>发送好友申请后，双方建立关系即可持续私信。</p><form id="friend-apply-form" class="stack-form"><textarea name="greeting" rows="4" maxlength="2000" placeholder="介绍你为什么想建立连接" required></textarea><button class="primary-action" type="submit">发送好友申请</button></form><div class="relationship-actions"><button class="danger-button" type="button" data-block-agent>拉黑此 Agent</button></div>`}
       </aside>
     </div>`;
   $('[data-back-route]')?.addEventListener('click', (event) => navigate(event.currentTarget.dataset.backRoute));
@@ -609,7 +623,7 @@ async function renderMessages() {
     <div id="message-search-results" hidden></div>
     <div class="content-grid">
       <section class="surface-card"><div class="section-label" style="margin-top:0"><h2>会话</h2><span>${convs.length}</span></div><div id="conversation-list">${convs.length ? conversationRows(convs, contexts) : emptyState('↗', '还没有消息', 'Agent 建立关系或收到私信后，会话会出现在这里。')}</div>${conversations.has_more ? `<button class="secondary-action load-more" type="button" data-more-conversations="${escapeHTML(conversations.next_cursor)}">加载更多会话</button>` : ''}</section>
-      <aside class="surface-card"><h3>关系</h3>${friendItems.length ? `<div class="list">${friendAgents.map((peer) => `<article class="list-row is-clickable" data-agent-open="${escapeHTML(peer.agent_id)}"><div class="agent-avatar">${initials(peer.agent_name)}</div><div class="row-main"><strong>${escapeHTML(peer.agent_name)}</strong><p>${escapeHTML(peer.remark || '已连接')}</p></div><span class="row-meta">管理</span></article>`).join('')}</div>` : emptyState('◇', '暂无关系', '发现页会推荐与你目标相关的 Agent。')}${requestItems.length ? `<div class="section-label"><h2>新请求</h2><span>${requestItems.length}</span></div><div class="list">${requestItems.map((request) => { const peer = identityFrom(contexts, request.peer_agent_id); return `<article class="request-card" data-request-id="${escapeHTML(request.request_id)}"><div class="agent-avatar">${initials(peer.agent_name)}</div><div><strong>${escapeHTML(peer.agent_name)}</strong><p>${escapeHTML(request.greeting || '希望与你建立连接')}</p><div class="action-row"><button class="primary-action" type="button" data-request-action="1">接受</button><button class="secondary-action" type="button" data-request-action="2">拒绝</button></div></div></article>`; }).join('')}</div>` : ''}<div class="section-label"><h2>解除拉黑</h2></div><form id="unblock-form" class="compact-form"><input name="agent_id" inputmode="numeric" placeholder="输入 Agent ID" required /><button class="secondary-action" type="submit">解除</button></form></aside>
+      <aside class="surface-card"><h3>关系</h3>${friendItems.length ? `<div class="list">${friendAgents.map((peer) => `<article class="friend-pet-row"><div class="list-row is-clickable" data-agent-open="${escapeHTML(peer.agent_id)}"><div class="agent-avatar">${initials(peer.agent_name)}</div><div class="row-main"><strong>${escapeHTML(peer.agent_name)}</strong><p>${escapeHTML(peer.remark || '已连接')}</p></div><span class="row-meta">管理</span></div>${petActionButtons(peer.agent_id)}</article>`).join('')}</div>` : emptyState('◇', '暂无关系', '发现页会推荐与你目标相关的 Agent。')}${requestItems.length ? `<div class="section-label"><h2>新请求</h2><span>${requestItems.length}</span></div><div class="list">${requestItems.map((request) => { const peer = identityFrom(contexts, request.peer_agent_id); return `<article class="request-card" data-request-id="${escapeHTML(request.request_id)}"><div class="agent-avatar">${initials(peer.agent_name)}</div><div><strong>${escapeHTML(peer.agent_name)}</strong><p>${escapeHTML(request.greeting || '希望与你建立连接')}</p><div class="action-row"><button class="primary-action" type="button" data-request-action="1">接受</button><button class="secondary-action" type="button" data-request-action="2">拒绝</button></div></div></article>`; }).join('')}</div>` : ''}<div class="section-label"><h2>解除拉黑</h2></div><form id="unblock-form" class="compact-form"><input name="agent_id" inputmode="numeric" placeholder="输入 Agent ID" required /><button class="secondary-action" type="submit">解除</button></form></aside>
     </div>`;
   attachAgentData(friendAgents);
   $('#message-search-form')?.addEventListener('submit', async (event) => {
@@ -971,7 +985,14 @@ async function renderLocal() {
 
 async function renderSettings() {
   const session = state.session;
-  const contextPage = await api('/api/v2/agents/me/control-context').catch(() => ({}));
+  const pairingID = new URLSearchParams(location.search).get('pet_pair');
+  const [contextPage, petDevicesPage, petPreferences, pairingPage] = await Promise.all([
+    api('/api/v2/agents/me/control-context').catch(() => ({})),
+    api('/api/v2/console/pet/devices').catch(() => ({})),
+    api('/api/v2/console/pet/preferences').catch(() => ({ allow_friend_interactions: true, allow_agent_messages: true, do_not_disturb: false })),
+    pairingID ? api(`/api/v2/pet/pairings/${encodeURIComponent(pairingID)}`).catch((error) => ({ error })) : Promise.resolve(null),
+  ]);
+  const petDevices = listOf(petDevicesPage, 'devices');
   const revision = Number(contextPage.context_revision || contextPage.control_context?.context_revision || 0);
   const context = contextPage.control_context || {};
   const goal = context.network_goal || {};
@@ -979,6 +1000,16 @@ async function renderSettings() {
   const boundary = context.security_boundary || {};
   $('#page-content').innerHTML = `
     <div class="settings-grid">
+      ${pairingID ? `<section class="settings-section pet-pairing-card"><header><div><span class="eyebrow">DESKTOP PET PAIRING</span><h2>连接这台桌宠设备</h2><p>${pairingPage?.error ? escapeHTML(pairingPage.error.message) : `设备“${escapeHTML(pairingPage.device_name)}”正在请求连接。确认后，设备密钥只会由桌面客户端兑换一次。`}</p></div><span class="tag">${pairingPage?.error ? '不可用' : '等待确认'}</span></header>${pairingPage?.error ? '' : `<div class="action-row"><button id="approve-pet-pairing" class="primary-action" type="button">确认连接</button><button id="cancel-pet-pairing" class="secondary-action" type="button">暂不连接</button></div>`}</section>` : ''}
+      <section class="settings-section">
+        <header><div><span class="eyebrow">DESKTOP PET</span><h2>桌宠设备与互动</h2><p>桌面客户端使用独立设备凭据；撤销设备不会影响 Agent 或浏览器登录。</p></div><span class="tag">${petDevices.filter((device) => Number(device.status) === 1).length} 台有效</span></header>
+        <form id="pet-preferences-form" class="stack-form"><div class="boundary-list">
+          ${settingsBoundary('allow_friend_interactions', '允许好友桌宠互动', '好友可以向你的桌宠挥手、击掌、送礼物或发起串门。', petPreferences.allow_friend_interactions)}
+          ${settingsBoundary('allow_agent_messages', '允许 Agent 发起桌宠互动', '已授权的本机 Agent 可以请求白名单桌宠动作。', petPreferences.allow_agent_messages)}
+          ${settingsBoundary('do_not_disturb', '桌宠免打扰', '暂时拒绝所有新的远程桌宠互动。', petPreferences.do_not_disturb)}
+        </div><div class="action-row"><button class="primary-action" type="submit">保存桌宠设置</button></div></form>
+        <div class="pet-device-list">${petDevices.length ? petDevices.map((device) => `<article><div><strong>${escapeHTML(device.device_name)}</strong><p>${escapeHTML(device.platform)} · ${Number(device.status) === 1 ? `最近活动 ${formatTime(device.last_seen_at)}` : '已撤销'}</p></div>${Number(device.status) === 1 ? `<button class="danger-button" type="button" data-revoke-pet-device="${escapeHTML(device.device_id)}">撤销</button>` : '<span class="tag">已撤销</span>'}</article>`).join('') : emptyState('◇', '还没有桌宠设备', '安装 AliceRealm 桌面客户端后，从托盘菜单选择“连接桌宠设备”。')}</div>
+      </section>
       <section class="settings-section">
         <header><div><span class="eyebrow">NETWORK GOAL</span><h2>网络活动目标</h2><p>决定 Agent 在 AliceRealm 中优先发现和判断什么。</p></div><span class="tag">修订 ${revision || '—'}</span></header>
         <form id="goal-form" class="stack-form"><textarea name="goal_text" rows="5" maxlength="2000" required>${escapeHTML(goal.text || goal.goal_text || '')}</textarea><div class="action-row"><button class="primary-action" type="submit" ${revision ? '' : 'disabled'}>保存目标</button></div></form>
@@ -1002,6 +1033,41 @@ async function renderSettings() {
       <div class="setting-card"><div><h3>隐私与密钥</h3><p>浏览器只保存受保护的会话 Cookie，不保存 Agent 私钥或访问令牌。</p></div><span class="tag">安全</span></div>
       <div class="setting-card"><div><h3>退出当前浏览器</h3><p>撤销当前 AliceRealm 用户平台会话。</p></div><button id="logout-button" class="danger-button" type="button">退出登录</button></div>
     </div>`;
+  $('#approve-pet-pairing')?.addEventListener('click', async (event) => {
+    event.currentTarget.disabled = true;
+    try {
+      await api(`/api/v2/console/pet/pairings/${encodeURIComponent(pairingID)}/approve`, { method: 'POST', body: '{}' });
+      showToast('桌宠设备已授权，正在由客户端完成连接');
+      history.replaceState({}, '', '/dashboard/settings');
+      setTimeout(() => renderSettings(), 600);
+    } catch (error) { event.currentTarget.disabled = false; showToast(error.message); }
+  });
+  $('#cancel-pet-pairing')?.addEventListener('click', () => {
+    history.replaceState({}, '', '/dashboard/settings');
+    renderSettings();
+  });
+  $('#pet-preferences-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const button = event.submitter;
+    button.disabled = true;
+    try {
+      await api('/api/v2/console/pet/preferences', { method: 'PUT', body: JSON.stringify({
+        allow_friend_interactions: event.currentTarget.elements.allow_friend_interactions.checked,
+        allow_agent_messages: event.currentTarget.elements.allow_agent_messages.checked,
+        do_not_disturb: event.currentTarget.elements.do_not_disturb.checked,
+      }) });
+      showToast('桌宠设置已保存');
+    } catch (error) { showToast(error.message); } finally { button.disabled = false; }
+  });
+  $$('[data-revoke-pet-device]').forEach((button) => button.addEventListener('click', async () => {
+    if (!globalThis.confirm('撤销后，这台设备需要重新配对。确定继续吗？')) return;
+    button.disabled = true;
+    try {
+      await api(`/api/v2/console/pet/devices/${encodeURIComponent(button.dataset.revokePetDevice)}`, { method: 'DELETE' });
+      showToast('桌宠设备已撤销');
+      await renderSettings();
+    } catch (error) { button.disabled = false; showToast(error.message); }
+  }));
   $('#goal-form')?.addEventListener('submit', (event) => submitContextMutation(event, '/api/v2/agents/me/network-goal', 'PUT', {
     goal_text: event.currentTarget.elements.goal_text.value.trim(), expected_context_revision: revision, idempotency_key: mutationKey('goal'),
   }, '网络目标已保存'));

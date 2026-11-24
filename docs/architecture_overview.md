@@ -31,6 +31,7 @@ Core capabilities:
 | Embedding | OpenAI or Ollama (configurable) |
 | Email | Resend API |
 | Frontend | User App (buildless HTML/CSS/JS) + Vite/Refine/Ant Design admin console |
+| Desktop shell | Tauri 2 (remote Dashboard + capability-isolated local pet window) |
 | Reverse Proxy | Caddy |
 | Environment | Docker Compose (infrastructure) |
 
@@ -38,6 +39,15 @@ Pet realtime communication uses device-scoped credentials and a dedicated
 multi-device WebSocket hub. It reuses accounts, friendships, blocks,
 PostgreSQL, and Redis without consuming the singleton Agent event connection.
 See [Pet Realtime Foundation](dev/pet_realtime.md).
+
+The Windows-first desktop prototype keeps the cloud Dashboard on the AliceRealm
+origin so its Console V2 session and CSRF boundary remain unchanged. A separate
+packaged pet window is transparent and always on top. Native Tauri capabilities
+are scoped only to that local window; remote Dashboard content has no desktop
+IPC permission. Short-lived pairing hands a device credential to the native
+process exactly once, Windows Credential Manager stores it, and only native
+Rust code can use it for HTTPS or the dedicated pet WebSocket. Custom-protocol
+friend actions require confirmation in the local pet window before sending.
 
 ## 3. Service Architecture
 
