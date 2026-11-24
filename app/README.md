@@ -66,7 +66,17 @@ Install Start menu and desktop shortcuts for an Edge app-mode window with:
 ./scripts/local/install-user-app.ps1
 ```
 
-The public user-level Windows installer includes its verified Node.js runtime:
+The Windows-first Tauri desktop test build, including the local pet window, is
+available directly as an NSIS executable:
+
+```text
+https://updates.alicerealm.com/desktop/windows/latest/AliceRealm-x64-setup.exe
+```
+
+Test builds are unsigned and may trigger Microsoft Defender SmartScreen. Public
+releases must be code-signed before broad distribution.
+
+The legacy Edge app-mode installer includes its verified Node.js runtime:
 
 ```powershell
 irm https://updates.alicerealm.com/app/windows/install.ps1 | iex

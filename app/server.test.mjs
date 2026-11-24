@@ -29,7 +29,10 @@ test('serves the user platform shell and SPA routes', async () => {
   for (const path of ['/', '/dashboard/today', '/dashboard/handoff?ticket=test#nonce=test']) {
     const response = await fetch(`http://127.0.0.1:${port}${path}`);
     assert.equal(response.status, 200);
-    assert.match(await response.text(), /AliceRealm · 我的网络/);
+    const shell = await response.text();
+    assert.match(shell, /AliceRealm · 我的网络/);
+    assert.match(shell, /updates\.alicerealm\.com\/desktop\/windows\/latest\/AliceRealm-x64-setup\.exe/);
+    assert.doesNotMatch(shell, /app\/windows\/install\.ps1/);
     assert.equal(response.headers.get('x-frame-options'), 'DENY');
   }
 });
