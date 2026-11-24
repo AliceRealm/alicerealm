@@ -114,9 +114,11 @@ class WorkflowRoutingTests(unittest.TestCase):
             'ruby', '-ryaml', '-rjson', '-e',
             'puts JSON.generate(YAML.load_file(ARGV[0]))', str(source)], text=True))
         jobs = data['jobs']
-        for name in ('auth-tests', 'windows-download-tests', 'release-artifact-handoff'):
+        for name in ('auth-tests', 'windows-download-tests', 'release-artifact-upload'):
             self.assertEqual(jobs[name]['needs'], 'scope')
             self.assertEqual(jobs[name]['if'], "needs.scope.outputs.full == 'true'")
+        self.assertEqual(jobs['release-artifact-handoff']['needs'], ['scope', 'release-artifact-upload'])
+        self.assertEqual(jobs['release-artifact-handoff']['if'], "needs.scope.outputs.full == 'true'")
         self.assertEqual(jobs['skills-tests']['if'], "needs.scope.outputs.full != 'true' && needs.scope.outputs.skills == 'true'")
         self.assertNotIn('setup-go@', json.dumps(jobs['source-checks']))
         steps = jobs['auth-tests']['steps']
