@@ -1,7 +1,7 @@
 use std::{
     sync::{
-        atomic::{AtomicI64, Ordering},
-        Mutex,
+        atomic::{AtomicBool, AtomicI64, Ordering},
+        Arc, Mutex,
     },
     time::Duration,
 };
@@ -17,6 +17,7 @@ use tauri::{
     AppHandle, Emitter, Manager, Runtime, State, WindowEvent,
 };
 use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_updater::UpdaterExt;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use url::Url;
 use uuid::Uuid;
@@ -32,6 +33,18 @@ struct PetRuntime {
     pairing_active: std::sync::atomic::AtomicBool,
     pending_action: Mutex<Option<PetAction>>,
     cursor: AtomicI64,
+}
+
+struct UpdateRuntime {
+    installing: AtomicBool,
+}
+
+impl UpdateRuntime {
+    fn new() -> Self {
+        Self {
+            installing: AtomicBool::new(false),
+        }
+    }
 }
 
 impl PetRuntime {
@@ -82,6 +95,22 @@ struct PairingExchange {
 struct PetConnectionEvent {
     state: &'static str,
     message: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct DesktopUpdateStatus {
+    current_version: String,
+    available: bool,
+    latest_version: Option<String>,
+    notes: Option<String>,
+    published_at: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct DesktopUpdateProgress {
+    state: &'static str,
+    downloaded: u64,
+    total: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -250,6 +279,13 @@ async fn send_pet_action(app: AppHandle, action: PetAction) -> Result<(), String
 }
 
 fn handle_desktop_url(app: AppHandle, url: Url) {
+    if url.scheme() == "alicerealm"
+        && url.host_str() == Some("settings")
+        && matches!(url.path(), "" | "/" | "/updates")
+    {
+        show_window(&app, "settings");
+        return;
+    }
     let action = match parse_pet_action(&url) {
         Ok(action) => action,
         Err(message) => {
@@ -477,11 +513,117 @@ fn cancel_pet_action(app: AppHandle, runtime: State<'_, PetRuntime>) -> Result<(
     Ok(())
 }
 
+fn emit_update_progress(app: &AppHandle, progress: DesktopUpdateProgress) {
+    if let Some(window) = app.get_webview_window("settings") {
+        let _ = window.emit("desktop-update-progress", progress);
+    }
+}
+
+async fn query_desktop_update(app: &AppHandle) -> Result<DesktopUpdateStatus, String> {
+    let current_version = app.package_info().version.to_string();
+    let update = app
+        .updater()
+        .map_err(|error| error.to_string())?
+        .check()
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(match update {
+        Some(update) => DesktopUpdateStatus {
+            current_version,
+            available: true,
+            latest_version: Some(update.version),
+            notes: update.body,
+            published_at: update.date.map(|date| date.to_string()),
+        },
+        None => DesktopUpdateStatus {
+            current_version,
+            available: false,
+            latest_version: None,
+            notes: None,
+            published_at: None,
+        },
+    })
+}
+
+#[tauri::command]
+async fn desktop_update_status(app: AppHandle) -> Result<DesktopUpdateStatus, String> {
+    query_desktop_update(&app).await
+}
+
+async fn perform_desktop_update(app: AppHandle) -> Result<(), String> {
+    let update = app
+        .updater()
+        .map_err(|error| error.to_string())?
+        .check()
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "当前已经是最新版本".to_string())?;
+
+    emit_update_progress(
+        &app,
+        DesktopUpdateProgress {
+            state: "downloading",
+            downloaded: 0,
+            total: None,
+        },
+    );
+    let progress_app = app.clone();
+    let finished_app = app.clone();
+    let downloaded = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let chunk_downloaded = downloaded.clone();
+    let finished_downloaded = downloaded.clone();
+    update
+        .download_and_install(
+            move |chunk_size, total| {
+                let downloaded = chunk_downloaded
+                    .fetch_add(chunk_size as u64, Ordering::SeqCst)
+                    .saturating_add(chunk_size as u64);
+                emit_update_progress(
+                    &progress_app,
+                    DesktopUpdateProgress {
+                        state: "downloading",
+                        downloaded,
+                        total,
+                    },
+                );
+            },
+            move || {
+                let downloaded = finished_downloaded.load(Ordering::SeqCst);
+                emit_update_progress(
+                    &finished_app,
+                    DesktopUpdateProgress {
+                        state: "downloaded",
+                        downloaded,
+                        total: Some(downloaded),
+                    },
+                );
+            },
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn install_desktop_update(
+    app: AppHandle,
+    runtime: State<'_, UpdateRuntime>,
+) -> Result<(), String> {
+    if runtime.installing.swap(true, Ordering::SeqCst) {
+        return Err("已有更新正在下载或安装".into());
+    }
+    let result = perform_desktop_update(app).await;
+    runtime.installing.store(false, Ordering::SeqCst);
+    result
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(PetRuntime::new())
+        .manage(UpdateRuntime::new())
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if let Some(url) = args.iter().find_map(|arg| Url::parse(arg).ok()) {
                 handle_desktop_url(app.clone(), url);
@@ -492,7 +634,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             ack_pet_interaction,
             confirm_pet_action,
-            cancel_pet_action
+            cancel_pet_action,
+            desktop_update_status,
+            install_desktop_update
         ])
         .setup(|app| {
             let dashboard =
@@ -505,6 +649,8 @@ pub fn run() {
                 MenuItem::with_id(app, "pet_interactive", "允许拖动桌宠", true, None::<&str>)?;
             let passthrough =
                 MenuItem::with_id(app, "pet_passthrough", "桌宠鼠标穿透", true, None::<&str>)?;
+            let check_updates =
+                MenuItem::with_id(app, "check_updates", "检查更新", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "退出 AliceRealm", true, None::<&str>)?;
             let menu = Menu::with_items(
                 app,
@@ -515,6 +661,7 @@ pub fn run() {
                     &hide_pet,
                     &interactive,
                     &passthrough,
+                    &check_updates,
                     &quit,
                 ],
             )?;
@@ -557,6 +704,7 @@ pub fn run() {
                     }
                     "pet_interactive" => set_pet_passthrough(app, false),
                     "pet_passthrough" => set_pet_passthrough(app, true),
+                    "check_updates" => show_window(app, "settings"),
                     "quit" => app.exit(0),
                     _ => {}
                 })
@@ -578,6 +726,19 @@ pub fn run() {
                     handle_desktop_url(app_handle.clone(), url.clone());
                 }
             });
+            let update_app = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Ok(status) = query_desktop_update(&update_app).await {
+                    if status.available {
+                        if let Some(tray) = update_app.tray_by_id("alicerealm") {
+                            let _ = tray.set_tooltip(Some("AliceRealm · 有新版本可用"));
+                        }
+                        if let Some(window) = update_app.get_webview_window("settings") {
+                            let _ = window.emit("desktop-update-available", status);
+                        }
+                    }
+                }
+            });
             if let Some(token) = load_device_token() {
                 start_realtime(app.handle().clone(), token);
             } else {
@@ -586,7 +747,7 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if matches!(window.label(), "main" | "pet") {
+            if matches!(window.label(), "main" | "pet" | "settings") {
                 if let WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
                     let _ = window.hide();

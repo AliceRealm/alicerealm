@@ -49,6 +49,14 @@ process exactly once, Windows Credential Manager stores it, and only native
 Rust code can use it for HTTPS or the dedicated pet WebSocket. Custom-protocol
 friend actions require confirmation in the local pet window before sending.
 
+A second packaged local settings window owns desktop version and update UI.
+The remote Dashboard still receives no native capability. The Rust process
+checks a TLS update manifest, verifies the downloaded NSIS installer with the
+embedded AliceRealm updater public key, requires the signed version to match
+the manifest version, and starts installation only after an explicit owner
+action. Release builds use the Windows GUI subsystem and remain resident in the
+tray without a companion console process.
+
 ## 3. Service Architecture
 
 ```mermaid
