@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>AliceRealm 桌面端设置</title>
+    <link rel="stylesheet" href="settings.css" />
+  </head>
+  <body>
+    <main class="settings-shell">
+      <header>
+        <div class="brand-mark" aria-hidden="true">A</div>
+        <div>
+          <p class="eyebrow">ALICEREALM DESKTOP</p>
+          <h1>桌面端设置</h1>
+          <p class="intro">查看当前版本，并安全地获取 AliceRealm 官方更新。</p>
+        </div>
+      </header>
+
+      <section class="update-card" aria-labelledby="update-title">
+        <div class="card-heading">
+          <div>
+            <p class="section-label">应用更新</p>
+            <h2 id="update-title">AliceRealm</h2>
+          </div>
+          <span id="version-badge" class="version-badge">正在读取版本…</span>
+        </div>
+
+        <div id="update-state" class="update-state" role="status" aria-live="polite">
+          正在检查更新…
+        </div>
+        <p id="release-notes" class="release-notes" hidden></p>
+
+        <div id="progress-wrap" class="progress-wrap" hidden>
+          <div class="progress-track" aria-hidden="true"><span id="progress-bar"></span></div>
+          <p id="progress-copy">正在准备下载…</p>
+        </div>
+
+        <div class="actions">
+          <button id="check-update" class="secondary" type="button">重新检查</button>
+          <button id="install-update" class="primary" type="button" hidden>下载并安装</button>
+        </div>
+      </section>
+
+      <aside class="security-note">
+        <strong>更新安全</strong>
+        <p>客户端只接受由 AliceRealm 更新密钥签名、且版本与签名一致的安装包。网页 Dashboard 无权直接安装程序。</p>
+      </aside>
+    </main>
+    <script src="settings.js" type="module"></script>
+  </body>
+</html>

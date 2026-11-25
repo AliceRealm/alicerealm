@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-desktop-update-status"
+description = "Allows the packaged settings window to check the signed AliceRealm desktop update channel."
+commands.allow = ["desktop_update_status"]
+
+[[permission]]
+identifier = "allow-install-desktop-update"
+description = "Allows the packaged settings window to install an AliceRealm desktop update after explicit owner confirmation."
+commands.allow = ["install_desktop_update"]

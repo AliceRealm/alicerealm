@@ -5,9 +5,13 @@ import { PET_INTERACTIONS, PetStateMachine, parsePetEnvelope } from './ui/pet-st
 
 const config = JSON.parse(await readFile(new URL('./src-tauri/tauri.conf.json', import.meta.url), 'utf8'));
 const capability = JSON.parse(await readFile(new URL('./src-tauri/capabilities/pet.json', import.meta.url), 'utf8'));
+const settingsCapability = JSON.parse(await readFile(new URL('./src-tauri/capabilities/settings.json', import.meta.url), 'utf8'));
+const mainRust = await readFile(new URL('./src-tauri/src/main.rs', import.meta.url), 'utf8');
 const rust = await readFile(new URL('./src-tauri/src/lib.rs', import.meta.url), 'utf8');
 const petHTML = await readFile(new URL('./ui/pet.html', import.meta.url), 'utf8');
 const petJS = await readFile(new URL('./ui/pet.js', import.meta.url), 'utf8');
+const settingsHTML = await readFile(new URL('./ui/settings.html', import.meta.url), 'utf8');
+const settingsJS = await readFile(new URL('./ui/settings.js', import.meta.url), 'utf8');
 
 test('desktop has one remote Dashboard and one isolated local pet window', () => {
   const windows = Object.fromEntries(config.app.windows.map((window) => [window.label, window]));
@@ -24,6 +28,31 @@ test('remote Dashboard receives no native capability', () => {
   assert.notEqual(config.app.withGlobalTauri, true);
   assert.ok(!JSON.stringify(capability).includes('main'));
   assert.match(config.app.security.csp, /connect-src 'none'/);
+});
+
+test('Windows release is a GUI process without a console window', () => {
+  assert.match(mainRust, /cfg_attr\(not\(debug_assertions\), windows_subsystem = "windows"\)/);
+});
+
+test('signed updater is isolated to the packaged settings window', () => {
+  const windows = Object.fromEntries(config.app.windows.map((window) => [window.label, window]));
+  assert.equal(windows.settings.url, 'settings.html');
+  assert.equal(windows.settings.visible, false);
+  assert.deepEqual(settingsCapability.windows, ['settings']);
+  assert.ok(!JSON.stringify(settingsCapability).includes('"main"'));
+  assert.equal(config.bundle.createUpdaterArtifacts, true);
+  assert.equal(config.bundle.windows.nsis.installerHooks, 'nsis/installer-hooks.nsh');
+  assert.equal(config.plugins.updater.requireSignedVersion, true);
+  assert.match(config.plugins.updater.endpoints[0], /^https:\/\/updates\.alicerealm\.com\//);
+  assert.ok(config.plugins.updater.pubkey.length > 100);
+  assert.match(rust, /tauri_plugin_updater::UpdaterExt/);
+  assert.match(rust, /"check_updates"/);
+  assert.match(rust, /desktop_update_status/);
+  assert.match(rust, /install_desktop_update/);
+  assert.match(settingsHTML, /id="install-update"/);
+  assert.match(settingsJS, /invoke\('desktop_update_status'\)/);
+  assert.match(settingsJS, /invoke\('install_desktop_update'\)/);
+  assert.doesNotMatch(settingsJS, /innerHTML/);
 });
 
 test('tray owns dashboard, pet visibility, passthrough, and explicit quit', () => {
